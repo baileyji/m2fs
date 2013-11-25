@@ -1,0 +1,15 @@
+<table>
+    <tr>
+        {% for name in column_names %}
+            <th> {{ name }} </th>
+        {% endfor %}
+    </tr>
+    {% for record in data %}
+    <tr>
+        {% for value in record %}
+            <td> {{ value }} </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    
+</table>
