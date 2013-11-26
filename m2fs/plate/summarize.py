@@ -1,18 +1,13 @@
-#! /usr/bin/env python
-import glob
-import sys
-from m2fscontrolPlate import Plate
+from plate import Plate
+from jbastro.astroLib import sexiegesmal_fmt
 
 def target(name, ra, de, ep=2000.0):
+    """name, 'hh mm ss.s', 'dd.mm.ss.s', ep=2000.0"""
     return {'name':name,'ra':ra,'de':de,'epoch':ep}
-
-extra=[target('HD223311','23 49 14.1','-06 18 20'),
-       target('HIP48331','09 51 06.68','-43 30 05.9'),
-       target('HIP10798','02 18 58.65','-25 56 48.4')]
 
 def write_summary_file(sfile, platefiles):
     tlist=[]
-    platerec='{name:<10} {ns:<2}\n'
+    platerec='{name:<10} {ns:>2} {offset:>5}\n'
     setuprec=('     {name:<11} {ra:<12} {de:<12} '
              '{epoch:<11} {sidereal_time:<11} {airmass:<11} {n:<11}\n')
     with open(sfile,'w') as fp:
@@ -25,7 +20,8 @@ def write_summary_file(sfile, platefiles):
                 print 'Platefile Error: {}'.format(e)
                 continue
 
-            fp.write(platerec.format(name=p.name, ns=p.n_setups))
+            fp.write(platerec.format(name=p.name, ns=p.n_setups,
+                    offset=p.standard_offset))
 
             fp.write(setuprec.format(name='Name', ra='RA',
                 de='DE',epoch='Epoch', sidereal_time='ST',
@@ -80,29 +76,6 @@ def write_target_list(tfile, recs):
             geq2=0,
             geq1=0)
             fp.write(s+'\n')
-
-
-
-def sexiegesmal_fmt(n, ra=False):
-    if type(n)==str:
-        if ':' in n:
-            return n
-        else:
-            return ':'.join(n.split())
-    if type(n) in [tuple, list]:
-        return ':'.join([str(x) for x in n])
-    if type(n) in (float, int):
-        if ra:
-            sec=3600*n/15.0
-            hord=int(sec)/3600
-            m=int(sec % 3600)/60
-            secs=(sec % 3600) % 60
-        else:
-            hord=int(n)
-            m=int((n-hord)*60)
-            secs=(n-hord-m*60)*60
-        return '{}:{}:{:.1f}'.format(hord,m,secs)
-    raise ValueError
 
 if __name__ == '__main__':
 
