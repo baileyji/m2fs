@@ -367,7 +367,7 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
     def _extract_list_to_dictlist(self,section, keep_key_as=None):
         """ get list of dicts with keys based on header row"""
         hrec=self.get(section,'H')
-        recs=filter(lambda x: [0]!='H', self.items(section))
+        recs=filter(lambda x: x[0]!='h', self.items(section))
 
         if '\t' in hrec:
             tabquote=True
@@ -381,7 +381,7 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
         else:
             extr_func=str.split
 
-        if recs[0][0][0]=='T':
+        if recs[0][0][0]=='t':
             keep_key_as=None  #TODO remove hack for v.1 fiber section with not needed
 
         ret=[]
@@ -390,6 +390,7 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
             rdict={keys[i].lower():vals[i] for i in range(len(keys))}# if vals[i] !='-'}
             if keep_key_as:
                 rdict[keep_key_as]=k.upper()
+            ret.append(rdict)
         return ret
 
     def get_guides(self, setup_section):
@@ -626,7 +627,7 @@ class PlugPlate(object):
             self.mechanical=[x for x in self.plate_holes if x['type'] in 'FT']
         try:
             self.standard=[x for x in self.plate_holes if x['type']=='O'][0]
-            self.standard_offset=plateConfig.get('Plate','std_offset')
+            self.standard_offset=plateConfig.get('Plate','offset')
         except IndexError:
             self.standard={}
             self.standard_offset=float('nan')
