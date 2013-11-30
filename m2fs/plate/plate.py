@@ -368,7 +368,8 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
         """ get list of dicts with keys based on header row"""
         hrec=self.get(section,'H')
         recs=filter(lambda x: x[0]!='h', self.items(section))
-
+        if not recs:
+            return []
         if '\t' in hrec:
             tabquote=True
             keys=map(str.lower, _extract_tab_quote_list(hrec))
@@ -402,7 +403,7 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
     def get_plate_holes(self):
         if not self.has_section('PlateHoles'):
             return []
-        return self._extract_list_to_dictlist(PlateHoles)
+        return self._extract_list_to_dictlist('PlateHoles')
 
     def setup_attrib(self,setup):
         """Get the setup attribute dict"""
