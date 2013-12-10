@@ -2,6 +2,7 @@
 import scipy.interpolate
 import numpy as np
 from astropy.stats import sigma_clip
+from astropy.io import fits
 
 def m2fs_scatter(im):
 
@@ -74,10 +75,9 @@ def m2fs_scatter(im):
 
 if __name__ == '__main__':
     import sys
-    hdu=fits.read(sys.argv[1])[0]
+    hdu=fits.open(sys.argv[1])[0]
     header=hdu.header
     im=hdu.data
-    im-=m2fs_scatter(im)
-    out=PrimaryHDU(im)
+    out=fits.PrimaryHDU(m2fs_scatter(im))
     out.header=header
     out.writeto(sys.argv[2])
