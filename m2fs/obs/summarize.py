@@ -1,8 +1,10 @@
 from astropy.io import fits
 from flask import Flask, render_template
 
-app = Flask(__name__)
 
+app = Flask(__name__)
+records=[]
+keys=[]
 default_keys=['FILENAME','OBJECT', 'EXPTIME', 'BINNING', 'SLIDE',
           'HI-AZIM', 'HI-ELEV', 'FOCUS', 'FILTER']
 keys=[]
@@ -12,12 +14,17 @@ def summary_table():
     return render_template('obs_log.html', column_names=keys, data=records)
 
 
-def make_table(files, userkeys=None):
+def run(files, userkeys=None, prepend=[], append=[], filterfunc=lambda x:True):
+    """filterfunc gets a fits header and returns true or false"""
     global keys, records
     if not userkeys:
         keys=default_keys
     else:
         keys=userkeys
-    records=[[fits.open(f)[0].header[k] for k in keys] for f in files]
+    keys=prepend+keys+append
+    for f in files:
+        header=fits.getheader(f)
+        if filterfunc(header):
+            records.append([header[k] for k in keys])
     app.debug=True
     app.run()
