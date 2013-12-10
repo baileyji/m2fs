@@ -154,7 +154,7 @@ def _make_extra_fmt_string(cols, recs):
     max_len=[n for e, n in l]
     fmt=_make_fmt_string(extra, max_len)
     return (fmt, extra)
-2
+
 def defdict(dic,default='-'):
     x=defaultdict(lambda:default)
     x.update(dic)
