@@ -244,6 +244,32 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
             if self.has_option('Plate','std_offset'):
                 self.set('Plate','offset',self.get('Plate','std_offset'))
                 self.remove_option('Plate','std_offset')
+            if not self.has_section('PlateHoles'):
+                self.add_section('PlateHoles')
+                self.set('PlateHoles','H','')
+
+            secs=list(self.sections())
+            for sec in secs:
+                if 'Setup' in sec and ':' in sec:
+                    if '\t' not in self.items(sec)[0][1]:
+                        import ipdb;ipdb.set_trace()
+                        continue
+                    for r in self.items(sec):
+                        if r[0]=='h':
+                            newform=r[1].replace("'",' ').replace('\t','     ').lower()
+                            newform=newform.replace(' dec ', ' de ')
+                            self.set(sec, *(r[0], newform))
+                        else:
+                            newform=_extract_tab_quote_list(r[1])
+                            for i in range(len(newform)):
+                                if not newform[i]:
+                                    newform[i]='-'
+                            newform[0]=newform[0].replace(' ',':')
+                            newform[1]=newform[1].replace(' ',':')
+                            self.set(sec, *(r[0], '      '.join(newform)))
+                if 'Setup' in sec and ':' not in sec and not self.has_section(sec+':Guide'):
+                    self.add_section(sec+':Guide')
+                    self.set(sec+':Guide','H','')
 
         #If errors abort
         #errs=self._vet()
@@ -384,6 +410,10 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
         ret=[]
         for k, rec in recs:
             vals=extr_func(rec)
+            try:
+                vals[keys.index('fiber')]=vals[keys.index('fiber')].replace('h','').replace('l','')
+            except ValueError:
+                pass
             rdict={keys[i].lower():vals[i] for i in range(len(keys))}# if vals[i] !='-'}
             if keep_key_as:
                 rdict[keep_key_as]=k.upper()
@@ -537,9 +567,16 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
                 fp.write(t_fmt.format('H',recs['H']))
                 
                 #Write fiber records
+                #import ipdb;ipdb.set_trace()
                 for fiber in ORDERED_FIBER_NAMES:
-                    fp.write(t_fmt.format(fiber,recs[fiber.lower()]))
-                
+                    try:
+                        if not recs[fiber].replace(' ','').replace('-',''):
+                            raise KeyError #hack for null assignements in old version
+                        fp.write(t_fmt.format(fiber,recs[fiber]))
+                    except KeyError:
+                        fp.write(t_fmt.format(fiber,'inactive'))  #Support conversion of version .1 -> current on the fly
+                        
+
                 #Write out the Guide section
                 recs=_dictlist_to_records(self.get_guides(s),
                                           GUIDE_REQUIRED_COLS,
