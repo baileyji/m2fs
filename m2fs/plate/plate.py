@@ -538,7 +538,7 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
                 
                 #Write fiber records
                 for fiber in ORDERED_FIBER_NAMES:
-                    fp.write(t_fmt.format(fiber,recs[fiber.lower()]))
+                    fp.write(t_fmt.format(fiber,recs[fiber]))
                 
                 #Write out the Guide section
                 recs=_dictlist_to_records(self.get_guides(s),
