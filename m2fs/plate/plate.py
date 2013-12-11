@@ -132,6 +132,50 @@ ORDERED_FIBER_NAMES=['{}{}-{:02}'.format(color,cnum,fnum)
                      for cnum in range(1,9)
                      for fnum in range(1,17)]
 
+GUIDE_KEY='G'
+PLATEHOLE_KEY='H'
+UNUSED_KEY='H'
+
+TARGET_REQUIRED_COLS=['id', 'ra','de','ep','slit','priority',
+                      'type', 'x','y','z','r']
+GUIDE_REQUIRED_COLS=['ra','de','ep','type', 'x','y','z','r']
+UNUSED_REQUIRED_COLS=['id', 'ra','de','ep','slit','priority',
+                      'type', 'x','y','z','r']
+PLATEHOLE_REQUIRED_COLS=['x','y','z','r','type']
+
+
+def _targ_dictlist_to_records(dictlist):
+    #Base record
+    cols=TARGET_REQUIRED_COLS
+    fmt=_make_fmt_string(cols, [STD_LEN[c] for c in cols])
+    
+    #Extra columns
+    extra_fmt,extra_cols=_make_extra_fmt_string(cols+['fiber'], dictlist)
+    
+    fmt+=' '+extra_fmt
+    
+    #Create the records
+    rec=[('H', fmt.format(r={c:c for c in cols+extra_cols}))] #header
+    
+    rec+=[(dic.pop('fiber').upper(), fmt.format(r=defdict(dic)))
+          for i, dic in enumerate(dictlist) ]
+    return rec
+
+def _dictlist_to_records(dictlist, cols, key):
+    #Base record
+    fmt=_make_fmt_string(cols, [STD_LEN[c] for c in cols])
+    
+    #Extra columns
+    extra_fmt,extra_cols=_make_extra_fmt_string(cols, dictlist)
+    fmt+=' '+extra_fmt
+    
+    #Create the records
+    rec=[('H',fmt.format(r={c:c for c in cols+extra_cols}))] #header
+    
+    rec+=[(key+"{}".format(i+1), fmt.format(r=defdict(dic)))
+          for i,dic in enumerate(dictlist)]
+    return rec
+
 def _make_fmt_string(keys, lengths):
     l_strs=[('>' if l >0 else '<')+str(abs(l)) for l in lengths]
     fmt_segs=["{r["+keys[i]+"]:"+l_strs[i]+"}" for i in range(len(keys))]
@@ -227,28 +271,18 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
         #Plate section
         self._update_section('Plate',sections['plate'])
         self.set('Plate','formatversion','0.3')
-        
+
         #Plate holes section
-        self._init_plateholes(sections['plateholes'])
+        recs=_dictlist_to_records(sections['plateholes'],
+                                  PLATEHOLE_REQUIRED_COLS,
+                                  PLATEHOLE_KEY)
+        for r in recs:
+            self.set('PlateHoles', *r)
         
         #Setup Sections
         for s in (k for k in sections if 'setup' in k.lower()):
             cannonical_setup_name=s.replace(' ','')
             self._init_setup_section(cannonical_setup_name, sections[s])
-    
-    def _init_plateholes(self, dicts):
-        """ take list of dicts with key value pairs 
-        of 'x','y','z','r', & 'type' and add them as
-        properly formatted strings to the plateHoles section
-        """
-        cols=['x','y','z','r','type']
-        fmt=_make_fmt_string(cols, [STD_LEN[c] for c in cols])
-
-        rec=[('H',fmt.format(r={c:c for c in cols}))]
-        rec+=[("H{}".format(i+1), fmt.format(r=defdict(dic)))
-              for i, dic in enumerate(dicts)]
-        for r in rec:
-            self.set('PlateHoles', *r)
 
     def _init_setup_section(self, setup_name, setup_dict):
         """ 
@@ -276,62 +310,24 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
         
         ###Add target section###
         
-        #Base record
-        cols=['id', 'ra','de','ep','slit','priority','type', 'x','y','z','r']
-        fmt=_make_fmt_string(cols, [STD_LEN[c] for c in cols])
-        
-        #Extra columns
-        extra_fmt,extra_cols=_make_extra_fmt_string(cols+['fiber'],
-                                                    setup_dict['Targets'])
-        
-        fmt+=' '+extra_fmt
-        
-        #Create the records
-        rec=[('H', fmt.format(r={c:c for c in cols+extra_cols}))] #header
-        
-        rec+=[(dic.pop('fiber'), fmt.format(r=defdict(dic)))
-              for dic in setup_dict['Targets'] ]
+        rec=_targ_dictlist_to_records(setup_dict['Targets'])
         for r in rec:
             self.set(setup_name+':Targets', *r)
 
         ###Add guide section###
-        
-        #Base record
-        cols=['ra','de','ep','type', 'x','y','z','r']
-        fmt=_make_fmt_string(cols, [STD_LEN[c] for c in cols])
-        
-        #Extra columns
-        extra_fmt,extra_cols=_make_extra_fmt_string(cols, setup_dict['Guide'])
-        fmt+=' '+extra_fmt
 
-        #Create the records
-        rec=[('H',fmt.format(r={c:c for c in cols+extra_cols}))] #header
-
-        rec+=[("G{}".format(i+1), fmt.format(r=defdict(dic)))
-              for i,dic in enumerate(setup_dict['Guide'])]
-
+        rec=_dictlist_to_records(setup_dict['Guide'],
+                                 GUIDE_REQUIRED_COLS,
+                                 GUIDE_KEY)
         for r in rec:
             self.set(setup_name+':Guide', *r)
-        
             
         ###Add Unused section###
         
         if 'Unused' in setup_dict:
-        
-            #Base record
-            cols=['id', 'ra','de','ep','slit','priority','type', 'x','y','z','r']
-            fmt=_make_fmt_string(cols, [STD_LEN[c] for c in cols])
-            
-            #Extra columns
-            extra_fmt,extra_cols=_make_extra_fmt_string(cols, setup_dict['Unused'])
-            fmt+=' '+extra_fmt
-
-            #Create the records
-            rec=[('H',fmt.format(r={c:c for c in cols+extra_cols}))] #header
-            
-            rec+=[("U{}".format(i+1), fmt.format(r=defdict(dic)))
-                   for i,dic in enumerate(setup_dict['Unused'])]
-
+            rec=_dictlist_to_records(setup_dict['Unused'],
+                                     UNUSED_REQUIRED_COLS,
+                                     UNUSED_KEY)
             for r in rec:
                 self.set(setup_name+':Unused', *r)
 
@@ -399,7 +395,13 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
         if not self.has_section(setup_section+':Guide'):
             return []
         return self._extract_list_to_dictlist(setup_section+':Guide')
-    
+        
+    def get_unused(self, setup_section):
+        """Return list of target dictionaries for setup section"""
+        if not self.has_section(setup_section+':Unused'):
+            return []
+        return self._extract_list_to_dictlist(setup_section+':Unused')
+
     def get_plate_holes(self):
         if not self.has_section('PlateHoles'):
             return []
@@ -502,16 +504,17 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
                 fp.write(r)
 
             #Write out mechanical holes
+            recs=_dictlist_to_records(self.get_plate_holes(),
+                                      PLATEHOLE_REQUIRED_COLS,
+                                      PLATEHOLE_KEY)
+
             fp.write("[PlateHoles]\n")
             
             ph_fmt="{:<3}: {}\n"
             
-            #Write header
-            v=self.get('PlateHoles','H')
-            fp.write(ph_fmt.format("H",v))
-            
-            for k, v in (r for r in self.items("PlateHoles") if r[0]!='h'):
-                 fp.write(ph_fmt.format(k,v))
+            #Write header & items
+            for r in recs:
+                fp.write(ph_fmt.format(*r))
             
             #Write out setup sections
             for s in self.setup_sections():
@@ -524,46 +527,45 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
                      fp.write(r)
                 
                 #Write out setup targets section
+                recs=dict(_targ_dictlist_to_records(self.get_targets(s)))
+                
                 fp.write("[{}:Targets]\n".format(s))
                 
                 t_fmt="{:<6}: {}\n"
                 
                 #Write header
-                v=self.get(s+':Targets','H')
-                fp.write(t_fmt.format('H',v))
+                fp.write(t_fmt.format('H',recs['H']))
                 
-                #Write fiber
-                recs=dict(self.items(s+':Targets'))
+                #Write fiber records
                 for fiber in ORDERED_FIBER_NAMES:
                     fp.write(t_fmt.format(fiber,recs[fiber.lower()]))
                 
                 #Write out the Guide section
+                recs=_dictlist_to_records(self.get_guides(s),
+                                          GUIDE_REQUIRED_COLS,
+                                          GUIDE_KEY)
+                
                 fp.write("[{}:Guide]\n".format(s))
                 
                 g_fmt="{:<3}: {}\n"
                 
-                #Write header
-                v=self.get(s+':Guide','H')
-                fp.write(g_fmt.format('H',v))
-                
-                #Write guides
-                for k, v in (r for r in self.items(s+':Guide') if r[0]!='h'):
-                    fp.write(g_fmt.format(k,v))
-                    
+                #Write header & guides (header is first in list)
+                for r in recs:
+                    fp.write(g_fmt.format(*r))
 
                 if self.has_section("{}:Unused".format(s)):
                     #Write out the unused section
+                    recs=_dictlist_to_records(self.get_unused(s),
+                                              UNUSED_REQUIRED_COLS,
+                                              UNUSED_KEY)
+
                     fp.write("[{}:Unused]\n".format(s))
 
                     u_fmt="{:<3}: {}\n"
 
-                    #Write header
-                    v=self.get(s+':Unused','H')
-                    fp.write(u_fmt.format('H',v))
-
-                    #Write unused
-                    for k, v in (r for r in self.items(s+':Unused') if r[0]!='h'):
-                        fp.write(u_fmt.format(k,v))
+                    #Write header & unused
+                    for r in recs:
+                        fp.write(u_fmt.format(*r))
 
 
 class NullPlate(object):
