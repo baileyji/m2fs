@@ -87,18 +87,7 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
         return
     else:
         print "Merging "+odir+basename.format(frameno=frameno)+'.fits'
-    
-    #Cosmic ray removal configuration
-    if type(do_cosmic)==bool:
-        if do_cosmic:
-            cosmic_settings={'sigclip': 6.0, 'sigfrac': 0.5, 'objlim': 2.0,
-                'iter':7} #6->10 & 2->4 or something for lamps
-            do_cosmic=cosmic_settings.copy()
-        else:
-            cosmic_settings={'iter':0}
-    else:
-        cosmic_settings=do_cosmic.copy()
-    
+
     #Load the data
     try:
         quadrant1=fits.open(f.format(frameno=frameno, quad=1))
@@ -107,7 +96,19 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
         quadrant4=fits.open(f.format(frameno=frameno, quad=4))
     except IOError, e:
         raise e
+
+    #Cosmic ray removal configuration
+    if type(do_cosmic)==bool:
+        if do_cosmic:
+            cosmic_settings={'sigclip': 8.0, 'sigfrac': 0.375, 'objlim': 1.5,
+                    'iter':7}
+            do_cosmic=cosmic_settings.copy()
+        else:
+            cosmic_settings={'iter':0}
+    else:
+        cosmic_settings=do_cosmic.copy()
     
+
     #Grab the bias and crop region from the first quadrant
     biassec=quadrant1[0].header['BIASSEC']
     bias=[int(s) for s in re.findall(r'\d+',biassec)]
