@@ -10,10 +10,17 @@ import m2fs.obs
 
 from multiprocessing import Pool
 
-def proc_quad(qdata, header, crop, bias, cosmic_settings):
+def proc_quad(qdata, header, cosmic_settings):
     """cosmic_settings = cosmic_kwargs + 'iter' or just 'iter':0"""
     
     cosmic_iter=cosmic_settings.pop('iter')
+    
+    
+    biassec=header['BIASSEC']
+    bias=[int(s) for s in re.findall(r'\d+',biassec)]
+    
+    trimsec=header['TRIMSEC']
+    crop=[int(s) for s in re.findall(r'\d+',trimsec)]
     
     #Compute & subtract mean bias row
     #biasrow=np.mean(qdata[bias[2]:,:],axis=0)
@@ -125,8 +132,8 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
 
 
     #Process them in multiple processes
-    args=[(q.data.copy(),q.header.copy(),crop, bias,
-           cosmic_settings.copy()) for q in quadrantData]
+    args=[(q.data.copy(),q.header.copy(), cosmic_settings.copy())
+          for q in quadrantData]
     pool = Pool(processes=4)
     res=[pool.apply_async(proc_quad, arg) for arg in args]
     pool.close()
