@@ -100,8 +100,8 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
     #Cosmic ray removal configuration
     if type(do_cosmic)==bool:
         if do_cosmic:
-            cosmic_settings={'sigclip': 8.0, 'sigfrac': 0.375, 'objlim': 1.5,
-                    'iter':7}
+            cosmic_settings={'sigclip': 7.0, 'sigfrac': 0.428, 'objlim': 1.4,
+                    'iter':10}
             do_cosmic=cosmic_settings.copy()
         else:
             cosmic_settings={'iter':0}
