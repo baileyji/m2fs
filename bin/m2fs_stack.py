@@ -70,24 +70,31 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     #load data and variance frames
     members=[]
     etimes=[]
-    for i,f in enumerate(files):
-        with fits.open(f) as im:
-            etimes.append(float(im[0].header['EXPTIME']))
-            members.append(im[0].header['FILENAME'])
-            imcube[:,:,i]=im[0].data/etimes[-1]
-            varcube[:,:,i]=im[1].data
+    try:
+        for i,f in enumerate(files):
+            with fits.open(f) as im:
+                etimes.append(float(im[0].header['EXPTIME']))
+                members.append(im[0].header['FILENAME'])
+                if etimes[-1]!=0.0:
+                    imcube[:,:,i]=im[0].data/etimes[-1]
+                else:
+                    imcube[:,:,i]=im[0].data
+                varcube[:,:,i]=im[1].data
 
-            if masked:
-                msk=im[2].data
-                if do_cosmic:
-                    foo=crreject(im[1].data)
-                    msk+=foo
-                msk=ndimage.morphology.binary_dilation(
-                    msk.astype(np.bool), structure=np.ones((3,3)),
-                    iterations=1, mask=None, output=None,
-                    border_value=0, origin=0, brute_force=False)
-            
-                mask[:,:,i]=msk
+                if masked:
+                    msk=im[2].data
+                    if do_cosmic:
+                        foo=crreject(im[1].data)
+                        msk+=foo
+                    msk=ndimage.morphology.binary_dilation(
+                        msk.astype(np.bool), structure=np.ones((3,3)),
+                        iterations=1, mask=None, output=None,
+                        border_value=0, origin=0, brute_force=False)
+                
+                    mask[:,:,i]=msk
+    except ValueError as e:
+        print "ValueError while merging:", files,f
+        return
 
     exptime=sum(etimes)
 
@@ -100,8 +107,12 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
         #Create masked arrays
         #Average the data count rates wieghted by the variance
         imcube_masked=np.ma.array(imcube,mask=mask)
-        im=np.ma.average(imcube_masked, axis=2, weights=varcube/np.array(etimes))
-        im=im.filled(float('nan'))
+        if exptime != 0.0:
+            im=np.ma.average(imcube_masked, axis=2,
+                             weights=varcube/np.array(etimes))
+        else:
+            im=np.ma.average(imcube_masked, axis=2)
+        im=im.filled(float(0))
         im*=exptime
         #Sum the variance frames
         var=np.ma.array(varcube,mask=mask).sum(axis=2).filled(float('nan'))
@@ -110,10 +121,11 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     header['FILENAME']=os.path.basename(outfile)
     header['EXPTIME']=exptime
     header['COMMENT']=','.join(members)
-    hdu = fits.PrimaryHDU(im, header=header)
+    hdu = fits.PrimaryHDU(im.astype(np.float32), header=header)
     hdul = fits.HDUList([hdu])
-    hdul.append(fits.ImageHDU(var,name='variance'))
-    hdul.append(fits.ImageHDU(np.sum(mask,axis=2).astype(np.uint8),name='mask'))
+    hdul.append(fits.ImageHDU(var.astype(np.float32),name='variance'))
+    hdul.append(fits.ImageHDU(np.sum(mask,axis=2).astype(np.uint8),name='crmask'))
+    hdul.append(fits.ImageHDU(np.zeros_like(im,dtype=np.uint8), name='bpmask'))
     hdul.writeto(outfile+'.fits')
 
 
@@ -145,7 +157,10 @@ if __name__ =='__main__':
                          key=lambda x: seqnos.__getitem__(filestack.index(x)) )
         color=m2fs.obs.info(filestack[0])['side']
         try:
-            #print filestack
+            if (os.path.exists(args.outdir+color+rangify(seqnos)+'.fits') or
+                os.path.exists(args.outdir+color+rangify(seqnos)+'.fits.gz')):
+                continue
+            
             print '   Stacking ',color+rangify(seqnos)
             stackimage(filestack,args.outdir+color+rangify(seqnos),
                        do_cosmic=args.do_cosmic)
