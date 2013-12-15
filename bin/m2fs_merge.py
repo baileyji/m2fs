@@ -39,9 +39,9 @@ if __name__ =='__main__':
     args=parse_cl()
     
     files = [os.path.join(dirpath, f)
-                 for dirpath, dirnames, files in os.walk(args.dir)
-                 for f in files if 'c1.fits' in f] #allow fits.gz
-    
+             for dirpath, dirnames, files in os.walk(args.dir)
+             for f in files if 'c1.fits' in f] #allow fits.gz
+
     try:
         seqno=get_seqnos(args.listfile)
         files=[f for f in files if int(m2fs.obs.info(f)['seqno']) in seqno]
@@ -51,4 +51,8 @@ if __name__ =='__main__':
 
     for i,f in enumerate(files):
         print "Merging {} of {}".format(i,len(files))
+        s=os.statvfs('/')
+        if (s.f_bavail * s.f_frsize) / 1024**2 < 5000:
+            print "Disk space too low"
+            continue
         mergequad(f, do_cosmic=args.do_cosmic, file=True, odir=args.outdir)
