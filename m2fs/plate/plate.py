@@ -123,7 +123,7 @@ REQUIRED_SETUP_SUBSECTIONS= {
     '0.2':['Targets','Guide'],
     '0.3':['Targets','Guide']}
 
-STD_LEN={'x':8,'y':8,'z':8,'r':7,'type':5,'id':23, 'ra':12,'de':12,
+STD_LEN={'x':8,'y':8,'z':8,'r':7,'type':5,'id':29, 'ra':12,'de':12,
          'ep':7,'slit':4,'priority':8}
 
 
@@ -252,7 +252,7 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
             for sec in secs:
                 if 'Setup' in sec and ':' in sec:
                     if '\t' not in self.items(sec)[0][1]:
-                        import ipdb;ipdb.set_trace()
+                        #import ipdb;ipdb.set_trace()
                         continue
                     for r in self.items(sec):
                         if r[0]=='h':
@@ -406,17 +406,41 @@ class PlateConfigParser(ConfigParser.RawConfigParser):
 
         if recs[0][0][0]=='t':
             keep_key_as=None  #TODO remove hack for v.1 fiber section with not needed
+            
+
 
         ret=[]
         for k, rec in recs:
             vals=extr_func(rec)
+
+            #fix for inactive & unassigned crap
+            if len(vals) != len(keys):
+                #import ipdb;ipdb.set_trace()
+                if vals[0] in ['inactive', 'unassigned']:
+                    if vals[0]=='inactive':
+                        vals=['inactive']+['-' for _ in keys[1:]]
+                        vals[keys.index('type')]='I'
+                    if vals[0]=='unassigned':
+                        vals=['unassigned']+['-' for _ in keys[1:]]
+                        vals[keys.index('type')]='U'
+
+            #Hack for leftover h & l in fiber ids
             try:
                 vals[keys.index('fiber')]=vals[keys.index('fiber')].replace('h','').replace('l','')
             except ValueError:
                 pass
+
+
+
             rdict={keys[i].lower():vals[i] for i in range(len(keys))}# if vals[i] !='-'}
             if keep_key_as:
                 rdict[keep_key_as]=k.upper()
+
+            #fix ra & dec formatting
+            for rdict_key, rdict_item in rdict.items():
+                if rdict_key in ['ra','de','dec'] and rdict_item !='-':
+                    rdict[rdict_key]='{: 03.0f}:{:02.0f}:{:04.1f}'.format(*map(float,rdict_item.split(':')))
+
             ret.append(rdict)
         return ret
 
