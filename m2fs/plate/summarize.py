@@ -1,5 +1,5 @@
 from plate import Plate
-from jbastro.astroLib import sexiegesmal_fmt
+from jbastro.astroLib import sexconvert
 
 def target(name, ra, de, ep=2000.0):
     """name, 'hh mm ss.s', 'dd.mm.ss.s', ep=2000.0"""
@@ -62,23 +62,23 @@ def write_target_list(tfile, recs):
         for i,r in enumerate(recs):
             s=obsfmt.format(n=i+1,
             id=r['name'].replace(' ', '_'),
-            ra=sexiegesmal_fmt(r['ra'],ra=True),
-            de=sexiegesmal_fmt(r['de']),
+            ra=sexconvert(r['ra'],ra=True,dtype=str),
+            de=sexconvert(r['de'],dtype=str),
             eq=r['epoch'],
             pmRA=0,
             pmDE=0,
             irot='-7.2',
             rotmode='EQU',
-            gra1=sexiegesmal_fmt(0),
-            gde1=sexiegesmal_fmt(0),
-            gra2=sexiegesmal_fmt(0),
-            gde2=sexiegesmal_fmt(0),
+            gra1=sexconvert(0,dtype=str),
+            gde1=sexconvert(0,dtype=str),
+            gra2=sexconvert(0,dtype=str),
+            gde2=sexconvert(0,dtype=str),
             geq2=0,
             geq1=0)
             fp.write(s+'\n')
 
 if __name__ == '__main__':
-
+    import glob, sys
     fname=sys.argv[1]
     sfile=fname+'_summ.txt'
     tfile=fname+'_tlist.txt'
