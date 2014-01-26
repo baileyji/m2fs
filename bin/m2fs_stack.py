@@ -51,14 +51,25 @@ def get_seqlists(listfile):
 
 
 def stackimage(files,  outfile, do_cosmic=False, **crparams):
-    """List of files to stack, output file sans extension."""
+    """
+    List of files to stack, output file sans extension.
+    
+    
+    output hdu
+    cleaned image
+    variance image
+    summed cr mask
+    bad pixel mask
+    
+    """
 
     
     nfile=len(files)
     #load first bias to get info
     with fits.open(files[0]) as im:
         header=im[0].header
-        imcube=np.zeros(im[0].data.shape+(nfile,),dtype=np.float32) #15 frames with float64 would be 3.7GB ram
+        #15 frames with float64 would be 3.7GB ram
+        imcube=np.zeros(im[0].data.shape+(nfile,),dtype=np.float32)
         if len(im) >2:
             masked=True
             mask=np.zeros_like(imcube, dtype=np.bool)
