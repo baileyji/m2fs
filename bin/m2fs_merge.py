@@ -55,4 +55,9 @@ if __name__ =='__main__':
         if (s.f_bavail * s.f_frsize) / 1024**2 < 5000:
             print "Disk space too low"
             continue
-        mergequad(f, do_cosmic=args.do_cosmic, file=True, odir=args.outdir)
+        if args.do_cosmic:
+            cosmic_settings={'sigclip': 15.0, 'sigfrac': .3, 'objlim': 1.4,
+                'iter':10}
+        else:
+            cosmic_settings=False
+        mergequad(f, do_cosmic=cosmic_settings, file=True, odir=args.outdir)
