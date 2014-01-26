@@ -54,7 +54,11 @@ def proc_quad(qdata, header, cosmic_settings):
 
 
 def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
-    """Give a seqno or a path to a quad if file set"""
+    """Give a seqno or a path to a quad if file set
+    do_cosmic=bool or dict like
+    sigma for init clip, fraction for neighbors, how much above background*
+    {'sigclip': 7.0, 'sigfrac': 0.428, 'objlim': 1.4, 'iter':10}
+    """
     if side == None and not file:
         try:
             mergequad(frameno,side='r', do_cosmic=do_cosmic)
