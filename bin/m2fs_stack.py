@@ -81,6 +81,8 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     #load data and variance frames
     members=[]
     etimes=[]
+    midpoint_weights=[]
+    midpoints=[]
     try:
         for i,f in enumerate(files):
             with fits.open(f) as im:
@@ -103,9 +105,28 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
                         border_value=0, origin=0, brute_force=False)
                 
                     mask[:,:,i]=msk
+                    
+                #compute midpoint
+                start=Time(im[0].header['UT-DATE']+' '+im[0].header['UT-TIME'],
+                           format='iso', scale='utc')
+                end=Time(im[0].header['UT-DATE']+' '+im[0].header['UT-END'],
+                         format='iso', scale='utc')
+                midpoints.append(start +.5*(end-start))
+                import ipdb;ipdb.set_trace() #midpoints untested
+                if masked:
+                    midpoint_weights.append(im[1].data[msk].sum())
+                else:
+                    midpoint_weights.append(im[1].data.sum())
+
     except ValueError as e:
         print "ValueError while merging:", files,f
         return
+
+    min_midpoint=min(ofs_mid)
+    midpoint=min_midpoint + TimeDelta(np.average([(m - min_midpoint).sec
+                                                  for m in midpoints],
+                                                 weights=midpoint_weights),
+                                      format='sec')
 
     exptime=sum(etimes)
 
@@ -117,7 +138,7 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     else:
         #Create masked arrays
         #Average the data count rates wieghted by the variance
-        imcube_masked=np.ma.array(imcube,mask=mask)
+        imcube_masked=np.ma.array(imcube, mask=mask)
         if exptime != 0.0:
             im=np.ma.average(imcube_masked, axis=2,
                              weights=varcube/np.array(etimes))
@@ -132,6 +153,9 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     header['FILENAME']=os.path.basename(outfile)
     header['EXPTIME']=exptime
     header['COMMENT']=','.join(members)
+    header['UT-MID']=str(midpoint)
+    
+    raise Exception('Compute exposure weighted midpoint')
     hdu = fits.PrimaryHDU(im.astype(np.float32), header=header)
     hdul = fits.HDUList([hdu])
     hdul.append(fits.ImageHDU(var.astype(np.float32),name='variance'))
@@ -151,8 +175,8 @@ if __name__ =='__main__':
         seqno_stacks=get_seqlists(args.listfile)
         
         to_stack_lists=[[f for f in files
-                         if int(m2fs.obs.info(f)['seqno']) in seqnos
-                         and side==m2fs.obs.info(f)['side']]
+                         if int(m2fs.obs.info(f).seqno) in seqnos
+                         and side==m2fs.obs.info(f).side]
                         for seqnos in seqno_stacks for side in 'rb']
                         
         to_stack_lists=[l for l in to_stack_lists if len(l) >1] #only stack 2 or more
@@ -163,10 +187,10 @@ if __name__ =='__main__':
     for i,filestack in enumerate(to_stack_lists):
         print "Stacking {} of {} ({} files)".format(i,
                 len(to_stack_lists), len(filestack))
-        seqnos=map(lambda f: int(m2fs.obs.info(f)['seqno']),filestack)
+        seqnos=map(lambda f: int(m2fs.obs.info(f).seqno),filestack)
         filestack=sorted(filestack,
                          key=lambda x: seqnos.__getitem__(filestack.index(x)) )
-        color=m2fs.obs.info(filestack[0])['side']
+        color=m2fs.obs.info(filestack[0]).side
         try:
             if (os.path.exists(args.outdir+color+rangify(seqnos)+'.fits') or
                 os.path.exists(args.outdir+color+rangify(seqnos)+'.fits.gz')):
