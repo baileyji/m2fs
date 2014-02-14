@@ -652,3 +652,15 @@ class PlugPlate(object):
     def listSetups(self):
         """ return a list of setup names """
         return self.setups.keys()
+
+
+def load_plugmap(platefile):
+    """Convenience function to load a plug map from disk"""
+    if type(platefile)==tuple:
+        platefile,setup=platefile
+        d=PlugPlate(platefile).setups[setup].get_nominal_fiber_hole_dict()
+    elif type(platefile)==str:
+        raise ValueError('Need tuple with setup specified')
+        #d=PlugPlate(platefile).get_nominal_fiber_hole_dict()
+    return d
+
