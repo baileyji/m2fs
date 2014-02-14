@@ -44,7 +44,7 @@ if __name__ =='__main__':
 
     try:
         seqno=get_seqnos(args.listfile)
-        files=[f for f in files if int(m2fs.obs.info(f)['seqno']) in seqno]
+        files=[f for f in files if int(m2fs.obs.info(f).seqno) in seqno]
     except IOError:
         print 'No listfile, doing all'
 
