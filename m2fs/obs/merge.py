@@ -72,7 +72,7 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
     
     if file:
         fname=frameno
-        frameno=int(m2fs.obs.info(fname).seqno
+        frameno=int(m2fs.obs.info(fname).seqno)
         basename=os.path.basename(fname)
         side=basename[0]
         dir=os.path.dirname(fname)+os.path.sep
