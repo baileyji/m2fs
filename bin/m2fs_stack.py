@@ -11,6 +11,7 @@ import argparse
 import m2fs.obs
 import os
 import operator
+from astropy.time import Time
 
 def parse_cl():
     parser = argparse.ArgumentParser(description='Quadrant merger',
@@ -122,7 +123,7 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
         print "ValueError while merging:", files,f
         return
 
-    min_midpoint=min(ofs_mid)
+    min_midpoint=min(midpoints)
     midpoint=min_midpoint + TimeDelta(np.average([(m - min_midpoint).sec
                                                   for m in midpoints],
                                                  weights=midpoint_weights),
