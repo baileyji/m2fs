@@ -53,7 +53,8 @@ def proc_quad(qdata, header, cosmic_settings):
     return (qdata, qvari, qmask)
 
 
-def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
+def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
+              repair=False):
     """Give a seqno or a path to a quad if file set
     do_cosmic=bool or dict like
     sigma for init clip, fraction for neighbors, how much above background*
@@ -172,6 +173,9 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
                  quadLoc[i][2]:quadLoc[i][3]]=np.rot90(np.fliplr(qvar),2)
             mask[quadLoc[i][0]:quadLoc[i][1],
                  quadLoc[i][2]:quadLoc[i][3]]=np.rot90(np.fliplr(qmask),2)
+
+    if repair:
+        jbastro.median_patch(out, mask)
 
     #Flip so it is in agreement with Mario's process
     out=np.flipud(out)
