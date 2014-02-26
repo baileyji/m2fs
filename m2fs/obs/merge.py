@@ -21,18 +21,17 @@ def proc_quad(qdata, header, cosmic_settings):
     
     trimsec=header['TRIMSEC']
     crop=[int(s) for s in re.findall(r'\d+',trimsec)]
+
+    #Compute & subtract median for overscan region rowwise
+    biaslevels=np.median(qdata[crop[2]-1:,bias[0]-1:bias[1]], axis=1)
+    qdata-=biaslevels[:,np.newaxis]
+
+    #Compute & subtract median bias row
+    qdata-=np.median(qdata[bias[2]:,:], axis=0)
     
-    #Compute & subtract mean bias row
-    #biasrow=np.mean(qdata[bias[2]:,:],axis=0)
-    #qdata-=biasrow
+    #Crop the image
+    qdata=qdata[crop[2]-1:crop[3],crop[0]-1:crop[1]]
     
-    #Compute mean for overscan region rowwise
-    biaslevels=np.median(qdata[crop[2]-1:crop[3],bias[0]-1:bias[1]],axis=1)
-    
-    #Crop image & subtract bias levels row wise
-    qdata=(qdata[crop[0]-1:crop[3],crop[0]-1:crop[1]] -
-           biaslevels[:,np.newaxis])
-           
     #Cosmic ray rejection
     if cosmic_iter>0:
         c=cosmicsimage(qdata, gain=header['EGAIN'],
