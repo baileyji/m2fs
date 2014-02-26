@@ -10,7 +10,7 @@ def _compute_midpoint(head):
     try:
         return Time(head['UT-MID'], format='iso', scale='utc')
     except KeyError:
-        import ipdb;ipdb.set_trace()
+        #import ipdb;ipdb.set_trace()
         start=Time(head['UT-DATE']+' '+head['UT-TIME'],
                    format='iso', scale='utc')
         end=Time(head['UT-DATE']+' '+head['UT-END'],
