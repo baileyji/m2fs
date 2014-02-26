@@ -1,6 +1,8 @@
 from plate import Plate
 from jbastro.astroLib import sexconvert
 
+ROTATOR_SETTING='-7.18'
+
 def target(name, ra, de, ep=2000.0):
     """name, 'hh mm ss.s', 'dd.mm.ss.s', ep=2000.0"""
     return {'name':name,'ra':ra,'de':de,'epoch':ep}
@@ -82,7 +84,7 @@ def generate_tlist_file(recs):
                         eq=r['epoch'],
                         pmRA=r.get('pmra', 0.0),
                         pmDE=r.get('pmdec', 0.0),
-                        irot='-7.2',
+                        irot=ROTATOR_SETTING,
                         rotmode='EQU',
                         gra1=sexconvert(0,dtype=str),
                         gde1=sexconvert(0,dtype=str),
