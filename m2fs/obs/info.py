@@ -10,7 +10,7 @@ def _compute_midpoint(head):
     try:
         return Time(head['UT-MID'], format='iso', scale='utc')
     except KeyError:
-        import ipdb;ipdb.set_trace()
+        #import ipdb;ipdb.set_trace()
         start=Time(head['UT-DATE']+' '+head['UT-TIME'],
                    format='iso', scale='utc')
         end=Time(head['UT-DATE']+' '+head['UT-END'],
@@ -23,7 +23,7 @@ class M2FS_Obs_Info(object):
         self.side=''
         self.seqno=0
         self.header=None
-        self.exp_midpoint=None
+        self.midpoint=None
 
 def info(file):
 
@@ -38,7 +38,7 @@ def info(file):
     
     ret.seqno=(os.path.basename(file)[1:5])
     ret.header=fits.getheader(file)
-    ret.exp_midpoint=_compute_midpoint(ret.header)
+    ret.midpoint=_compute_midpoint(ret.header)
 
     return ret
 

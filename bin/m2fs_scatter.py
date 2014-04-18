@@ -12,7 +12,9 @@ if __name__ == '__main__':
     if len(sys.argv) >2:
         ofile=sys.argv[2]
     else:
-        ofile=file
+        print ' Output file not specified'
+        raise ValueError
+
     hdul=fits.open(file)
 
     im=hdul[0].data
@@ -45,6 +47,9 @@ if __name__ == '__main__':
     plt.show()
 
     im-=scat_disp
-    hdul.append(fits.ImageHDU(scat_disp.astype(np.float32), name='scatter'))
-    hdul.writeto(ofile)
-
+    if ofile==file:
+        hdul.append(fits.ImageHDU(scat_disp.astype(np.float64), name='scatter'))
+        hdul.writeto(ofile)
+    else:
+        hdu=fits.PrimaryHDU(data=scat_disp)
+        hdu.writeto(ofile)

@@ -11,6 +11,7 @@ import argparse
 import m2fs.obs
 import os
 import operator
+from astropy.time import Time, TimeDelta
 
 def parse_cl():
     parser = argparse.ArgumentParser(description='Quadrant merger',
@@ -112,7 +113,7 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
                 end=Time(im[0].header['UT-DATE']+' '+im[0].header['UT-END'],
                          format='iso', scale='utc')
                 midpoints.append(start +.5*(end-start))
-                import ipdb;ipdb.set_trace() #midpoints untested
+                #import ipdb;ipdb.set_trace() #midpoints untested
                 if masked:
                     midpoint_weights.append(im[1].data[msk].sum())
                 else:
@@ -122,7 +123,7 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
         print "ValueError while merging:", files,f
         return
 
-    min_midpoint=min(ofs_mid)
+    min_midpoint=min(midpoints)
     midpoint=min_midpoint + TimeDelta(np.average([(m - min_midpoint).sec
                                                   for m in midpoints],
                                                  weights=midpoint_weights),
@@ -155,7 +156,7 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     header['COMMENT']=','.join(members)
     header['UT-MID']=str(midpoint)
     
-    raise Exception('Compute exposure weighted midpoint')
+#    raise Exception('Compute exposure weighted midpoint')
     hdu = fits.PrimaryHDU(im.astype(np.float32), header=header)
     hdul = fits.HDUList([hdu])
     hdul.append(fits.ImageHDU(var.astype(np.float32),name='variance'))

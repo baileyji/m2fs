@@ -21,18 +21,17 @@ def proc_quad(qdata, header, cosmic_settings):
     
     trimsec=header['TRIMSEC']
     crop=[int(s) for s in re.findall(r'\d+',trimsec)]
+
+    #Compute & subtract median for overscan region rowwise
+    biaslevels=np.median(qdata[crop[2]-1:,bias[0]-1:bias[1]], axis=1)
+    qdata-=biaslevels[:,np.newaxis]
+
+    #Compute & subtract median bias row
+    qdata-=np.median(qdata[bias[2]:,:], axis=0)
     
-    #Compute & subtract mean bias row
-    #biasrow=np.mean(qdata[bias[2]:,:],axis=0)
-    #qdata-=biasrow
+    #Crop the image
+    qdata=qdata[crop[2]-1:crop[3],crop[0]-1:crop[1]]
     
-    #Compute mean for overscan region rowwise
-    biaslevels=np.median(qdata[crop[2]-1:crop[3],bias[0]-1:bias[1]],axis=1)
-    
-    #Crop image & subtract bias levels row wise
-    qdata=(qdata[crop[0]-1:crop[3],crop[0]-1:crop[1]] -
-           biaslevels[:,np.newaxis])
-           
     #Cosmic ray rejection
     if cosmic_iter>0:
         c=cosmicsimage(qdata, gain=header['EGAIN'],
@@ -53,7 +52,8 @@ def proc_quad(qdata, header, cosmic_settings):
     return (qdata, qvari, qmask)
 
 
-def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
+def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
+              repair=False):
     """Give a seqno or a path to a quad if file set
     do_cosmic=bool or dict like
     sigma for init clip, fraction for neighbors, how much above background*
@@ -172,6 +172,9 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir=''):
                  quadLoc[i][2]:quadLoc[i][3]]=np.rot90(np.fliplr(qvar),2)
             mask[quadLoc[i][0]:quadLoc[i][1],
                  quadLoc[i][2]:quadLoc[i][3]]=np.rot90(np.fliplr(qmask),2)
+
+    if repair:
+        jbastro.median_patch(out, mask)
 
     #Flip so it is in agreement with Mario's process
     out=np.flipud(out)
