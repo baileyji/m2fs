@@ -27,11 +27,12 @@ def get_seqnos(listfile):
     ret=set()
     with open(listfile,'r') as lf:
         for l in lf:
-            try:
-                if l[0] in '1234567890':
-                    ret.update(derangify(l.split()[0]))
-            except Exception:
-                raise
+            if l[0] in '1234567890':
+                range=l.split()[0]
+                ret.update(map(str,derangify(range)))
+            elif len(l)>1 and l[0] in 'RBrb' and l[1] in '1234567890':
+                range=l[1:].split()[0]
+                ret.update(map(lambda x: l[0].lower()+str(x), derangify(range)))
     return list(ret)
 
 if __name__ =='__main__':
@@ -40,11 +41,19 @@ if __name__ =='__main__':
     
     files = [os.path.join(dirpath, f)
              for dirpath, dirnames, files in os.walk(args.dir)
-             for f in files if 'c1.fits' in f] #allow fits.gz
+             for f in files
+             if 'c1.fits' in f and f not in ['rc1.fits','bc1.fits']] #allow fits.gz
 
     try:
         seqno=get_seqnos(args.listfile)
-        files=[f for f in files if int(m2fs.obs.info(f).seqno) in seqno]
+        info=[m2fs.obs.info(f,no_load=True) for f in files]
+
+        files=[]
+        for i in info:
+            for s in seqno:
+                if i.seqno_match(s):
+                    files.append(i.file)
+                    break
     except IOError:
         print 'No listfile, doing all'
 

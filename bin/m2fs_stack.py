@@ -41,11 +41,13 @@ def get_seqlists(listfile):
     ret=set()
     with open(listfile,'r') as lf:
         for l in lf:
-            try:
-                if l[0] in '1234567890':
-                    ret.add(derangify(l.split()[0]))
-            except Exception:
-                raise
+            if l[0] in '1234567890':
+                range=l.split()[0]
+                ret.add(tuple(map(str,derangify(range))))
+            elif len(l)>1 and l[0] in 'RBrb' and l[1] in '1234567890':
+                range=l[1:].split()[0]
+                ret.add(tuple(map(lambda x: l[0].lower()+str(x),
+                                  derangify(range))))
     return list(ret)
 
 
@@ -70,7 +72,7 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     with fits.open(files[0]) as im:
         header=im[0].header
         #15 frames with float64 would be 3.7GB ram
-        imcube=np.zeros(im[0].data.shape+(nfile,),dtype=np.float32)
+        imcube=np.zeros(im[1].data.shape+(nfile,),dtype=np.float32)
         if len(im) >2:
             masked=True
             mask=np.zeros_like(imcube, dtype=np.bool)
@@ -84,21 +86,25 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     etimes=[]
     midpoint_weights=[]
     midpoints=[]
+    airmasses=[]
+    first_uttime=None
+    last_utend=None
     try:
         for i,f in enumerate(files):
             with fits.open(f) as im:
+                airmasses.append(im[0].header['AIRMASS'])
                 etimes.append(float(im[0].header['EXPTIME']))
                 members.append(im[0].header['FILENAME'])
                 if etimes[-1]!=0.0:
-                    imcube[:,:,i]=im[0].data/etimes[-1]
+                    imcube[:,:,i]=im[1].data/etimes[-1]
                 else:
-                    imcube[:,:,i]=im[0].data
-                varcube[:,:,i]=im[1].data
+                    imcube[:,:,i]=im[1].data
+                varcube[:,:,i]=im[2].data
 
                 if masked:
-                    msk=im[2].data
+                    msk=im[3].data
                     if do_cosmic:
-                        foo=crreject(im[1].data)
+                        foo=crreject(im[2].data)
                         msk+=foo
                     msk=ndimage.morphology.binary_dilation(
                         msk.astype(np.bool), structure=np.ones((3,3)),
@@ -113,16 +119,26 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
                 end=Time(im[0].header['UT-DATE']+' '+im[0].header['UT-END'],
                          format='iso', scale='utc')
                 midpoints.append(start +.5*(end-start))
+                
+                #keep track of stacked beginning and end
+                if type(first_uttime) == type(None) or first_uttime>start:
+                    first_uttime=start
+#                if first_uttime>start: first_uttime=start
+                if type(last_utend) == type(None) or last_utend<end:
+                    last_utend=end
+#                if last_utend<end: last_utend=end
+
                 #import ipdb;ipdb.set_trace() #midpoints untested
                 if masked:
-                    midpoint_weights.append(im[1].data[msk].sum())
+                    midpoint_weights.append(im[2].data[msk].sum())
                 else:
-                    midpoint_weights.append(im[1].data.sum())
+                    midpoint_weights.append(im[2].data.sum())
 
     except ValueError as e:
         print "ValueError while merging:", files,f
         return
 
+    mean_airmass=np.mean(airmasses)
     min_midpoint=min(midpoints)
     midpoint=min_midpoint + TimeDelta(np.average([(m - min_midpoint).sec
                                                   for m in midpoints],
@@ -142,7 +158,7 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
         imcube_masked=np.ma.array(imcube, mask=mask)
         if exptime != 0.0:
             im=np.ma.average(imcube_masked, axis=2,
-                             weights=varcube/np.array(etimes))
+                             weights=varcube)#/np.array(etimes))
         else:
             im=np.ma.average(imcube_masked, axis=2)
         im=im.filled(float(0))
@@ -150,19 +166,33 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
         #Sum the variance frames
         var=np.ma.array(varcube,mask=mask).sum(axis=2).filled(float('nan'))
 
-    #Write out the merged file
+    #Update the header
     header['FILENAME']=os.path.basename(outfile)
     header['EXPTIME']=exptime
     header['COMMENT']=','.join(members)
     header['UT-MID']=str(midpoint)
+    header['UT-TIME']=str(first_uttime)
+    header['UT-END']=str(last_utend)
+    header['AIRMASS']=mean_airmass
     
-#    raise Exception('Compute exposure weighted midpoint')
-    hdu = fits.PrimaryHDU(im.astype(np.float32), header=header)
-    hdul = fits.HDUList([hdu])
-    hdul.append(fits.ImageHDU(var.astype(np.float32),name='variance'))
-    hdul.append(fits.ImageHDU(np.sum(mask,axis=2).astype(np.uint8),name='crmask'))
-    hdul.append(fits.ImageHDU(np.zeros_like(im,dtype=np.uint8), name='bpmask'))
-    hdul.writeto(outfile+'.fits')
+    print('Setting noise and gain to 0 & 1')
+    header['EGAIN']=1.0
+    header['ENOISE']=0.0
+    
+    #Create a primary extension with header only
+    #   (this seems to be a fits convention)
+    hdul = fits.HDUList(fits.PrimaryHDU(header=header))
+    
+    #Append image extensions
+    hdul.append(fits.ImageHDU(im.astype(np.float32),
+                              name='science', header=header))
+    hdul.append(fits.ImageHDU(var.astype(np.float32),
+                              name='variance', header=header))
+    hdul.append(fits.ImageHDU(np.sum(mask,axis=2).astype(np.uint8),
+                              name='crmask'))
+    hdul.append(fits.ImageHDU(np.zeros_like(im,dtype=np.uint8),
+                              name='bpmask'))
+    hdul.writeto(outfile+'.fits.gz')
 
 
 if __name__ =='__main__':
@@ -171,14 +201,16 @@ if __name__ =='__main__':
     
     files=[os.path.join(dirpath, f)
             for dirpath, dirnames, files in os.walk(args.dir)
-            for f in files if '.fits' in f and '-' not in f and ',' not in f] #allow fits.gz
+            for f in files
+            if '.fits' in f and '-' not in f and
+                ',' not in f and 'c' not in f]
     try:
         seqno_stacks=get_seqlists(args.listfile)
-        
+
         to_stack_lists=[[f for f in files
-                         if int(m2fs.obs.info(f).seqno) in seqnos
-                         and side==m2fs.obs.info(f).side]
-                        for seqnos in seqno_stacks for side in 'rb']
+                         if m2fs.obs.info(f, no_load=True).seqno_match(seqnos)
+                         and side==m2fs.obs.info(f,no_load=True).side]
+                         for seqnos in seqno_stacks for side in 'rb']
                         
         to_stack_lists=[l for l in to_stack_lists if len(l) >1] #only stack 2 or more
     
@@ -188,10 +220,11 @@ if __name__ =='__main__':
     for i,filestack in enumerate(to_stack_lists):
         print "Stacking {} of {} ({} files)".format(i,
                 len(to_stack_lists), len(filestack))
-        seqnos=map(lambda f: int(m2fs.obs.info(f).seqno),filestack)
+        seqnos=map(lambda f: int(m2fs.obs.info(f, no_load=True).seqno),
+                   filestack)
         filestack=sorted(filestack,
                          key=lambda x: seqnos.__getitem__(filestack.index(x)) )
-        color=m2fs.obs.info(filestack[0]).side
+        color=m2fs.obs.info(filestack[0], no_load=True).side
         try:
             if (os.path.exists(args.outdir+color+rangify(seqnos)+'.fits') or
                 os.path.exists(args.outdir+color+rangify(seqnos)+'.fits.gz')):

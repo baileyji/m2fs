@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 setup(name='M2FS',
-      version='0.2',
+      version='0.3',
       description='M2FS reduction utilities',
       author='Jeb Bailey',
       author_email='baileyji@umich.edu',
@@ -13,6 +13,7 @@ setup(name='M2FS',
                'bin/m2fs_obslog.py',
                'bin/m2fs_platesummary.py',
                'bin/m2fs_scatter.py',
-               'bin/m2fs_stack.py'],
+               'bin/m2fs_stack.py',
+               'bin/m2fs_focus.py'],
       install_requires=['numpy']
       )
