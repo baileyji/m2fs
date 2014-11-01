@@ -72,7 +72,7 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     
     if file:
         fname=frameno
-        frameno=int(m2fs.obs.info(fname).seqno)
+        frameno=int(m2fs.obs.info(fname, no_load=True).seqno)
         basename=os.path.basename(fname)
         side=basename[0]
         dir=os.path.dirname(fname)+os.path.sep
@@ -188,13 +188,15 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     headerout['FILENAME']=basename.format(frameno=frameno)
     headerout['BUNIT']='E-/PIXEL'
 
-    hdu = fits.PrimaryHDU(out, header=headerout)
-    hdul = fits.HDUList([hdu])
-    hdul.append(fits.ImageHDU(vout,name='variance'))
+    hdul = fits.HDUList(fits.PrimaryHDU(header=headerout))
+    hdul.append(fits.ImageHDU(out.astype(np.float32),
+                              name='science', header=headerout))
+    hdul.append(fits.ImageHDU(vout.astype(np.float32),
+                              name='variance', header=headerout))
     if do_cosmic:
-        hdul.append(fits.ImageHDU(mask,name='mask'))
-    if not os.path.exists(odir+basename.format(frameno=frameno)+'.fits'):
-        hdul.writeto(odir+basename.format(frameno=frameno)+'.fits')
+        hdul.append(fits.ImageHDU(mask, name='mask'))
+    if not os.path.exists(odir+basename.format(frameno=frameno)+'.fits.gz'):
+        hdul.writeto(odir+basename.format(frameno=frameno)+'.fits.gz')
 
 def makesuperbias(filenos, side, name):
     

@@ -1,55 +1,91 @@
 #!/usr/bin/python
-import scipy.interpolate
-import numpy as np
-from astropy.stats import sigma_clip
 from astropy.io import fits
-from m2fs.obs import scatterxfirst
-import matplotlib.pyplot as plt
+from m2fs.obs.scatter import mkscatter
+import numpy as np
+import argparse
+
+
+def parse_cl():
+    parser = argparse.ArgumentParser(description='Quadrant merger',
+                                     add_help=True)
+    parser.add_argument('-d','--debug', dest='debug',
+                     action='store_true', required=False,
+                     help='Debug mode',default=False)
+#    parser.add_argument('-l','--listfile', dest='listfile', default='',
+#                     action='store', required=True, type=str,
+#                     help='testfile with files to proces')
+    parser.add_argument('-f', dest='file', default='',
+                     action='store', required=True, type=str,
+                     help='File to proces')
+    parser.add_argument('-a', dest='add', default=False,
+                     action='store_true', required=False,
+                     help='Add scatter')
+    parser.add_argument('-s', dest='silent', default=False,
+                     action='store_true', required=False,
+                     help='Work quietly')
+    parser.add_argument('-t', dest='threshold', default=.7,
+                     action='store', required=False, type=float,
+                     help='Scattering threshold')
+    parser.add_argument('-g', '--noglow', dest='glow', default=True,
+                     action='store_false', required=False,
+                     help='Do not model amplifier glow')
+    parser.add_argument('-o', '--offset', dest='offset', default=0,
+                     action='store', required=False, type=int,
+                     help='Shift scatter regions up/down')
+    parser.add_argument('--glowonly', dest='glowonly', default=False,
+                     action='store_true', required=False,
+                     help='Only model the glow')
+#    parser.add_argument('-o', dest='outdir', default='./',
+#                     action='store', required=False, type=str,
+#                     help='Out directory')
+
+    args=parser.parse_args()
+    return args
+
+
+def add_scatter(f, debug=False, plot=True, thresh=.7, glow=True, offset=0,
+                glowOnly=False):
+    hdul=fits.open(f, mode='update')
+    s_im, err, (s_model, im_masked, glow) =mkscatter(hdul[1].data, plot=plot,
+                                                     debug=debug,
+                                                     scatter_thresh=thresh,
+                                                     header=hdul[1].header,
+                                                     do_glow=glow,
+                                                     offset=offset,
+                                                     glowOnly=glowOnly)
+
+    input=raw_input('Ok? ').lower() if plot or debug else 'y'
+    if input in ['y', 'yes']:
+        hdul[1].data-=s_im
+        hdul[2].data+=err**2
+        hdul.insert(3, fits.ImageHDU(s_im.astype(np.float32), name='scatter'))
+        hdul[3].header['SVAR']=err**2
+    hdul.close()
+
 
 if __name__ == '__main__':
     import sys
-    file=sys.argv[1]
-    if len(sys.argv) >2:
-        ofile=sys.argv[2]
+
+    args=parse_cl()
+    file=args.file
+    
+    if args.add:
+        add_scatter(file, debug=args.debug, plot=not args.silent,
+                    thresh=args.threshold, glow=args.glow, offset=args.offset)
     else:
-        print ' Output file not specified'
-        raise ValueError
+        if len(sys.argv) >2:
+            ofile=sys.argv[2]
+        else:
+            print ' Output file not specified'
+            raise ValueError
+        s_im, err =mkscatter(fits.getdata(file), thresh=args.threshold,
+                             glow=args.glow)
 
-    hdul=fits.open(file)
+        if ofile==file:
+            ofile+='.scatter.fits.gz'
 
-    im=hdul[0].data
-
-    scatter_regions=[(2,75), (480,575), (1010,1100), (1525,1600), (2035,2120),
-                     (2540,2620), (3030,3110), (3525, 3600), (3995 ,4109)]
-
-    scat_disp=scatterxfirst(im,scatter_regions,prof_order=8)
-
-    plt.figure(1)
-    plt.imshow(scat_disp,origin='lower')
-    plt.title('disp: max={} min={} mean={}'.format(
-                scat_disp.max(),
-                scat_disp.min(),
-                scat_disp.mean()))
-
-
-    plt.figure(2)
-    plt.imshow(im-scat_disp,origin='lower')
-    plt.title('im-disp: max={} min={} mean={}'.format(
-               (im-scat_disp).max(),
-               (im-scat_disp).min(),
-               (im-scat_disp).mean()))
-
-    plt.figure(3)
-    x=2000
-    plt.plot((im-scat_disp)[:,x:x+100].sum(axis=1)/100)
-    plt.title('im-disp')
-
-    plt.show()
-
-    im-=scat_disp
-    if ofile==file:
-        hdul.append(fits.ImageHDU(scat_disp.astype(np.float64), name='scatter'))
-        hdul.writeto(ofile)
-    else:
-        hdu=fits.PrimaryHDU(data=scat_disp)
+        hdu=fits.PrimaryHDU(s_im.astype(np.float32))
         hdu.writeto(ofile)
+
+
+
