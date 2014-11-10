@@ -64,6 +64,17 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     summed cr mask
     bad pixel mask
     
+    
+    So this is pretty far afield from what it should be
+    
+    ci= estimate of total frame throughput relative to frame with most
+    n = number of frames
+    k=number of corrupted frames at given pixel
+    
+    s = (n+k)/n * sum(pixel_i/ci)
+    v = ((n+k)/n)^2 sum((pixel_i+rn^2)/ci^2)
+    
+    
     """
 
     
