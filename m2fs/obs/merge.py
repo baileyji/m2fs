@@ -181,18 +181,26 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     vout=np.flipud(vout)
     mask=np.flipud(mask)
 
+    #make CRs count as nothing
+    out[mask.astype(bool)]=0
+    vout[mask.astype(bool)]=1e9
+    
+
     #Write out the merged file
     headerout.pop('TRIMSEC')
     headerout.pop('BIASSEC')
     headerout.pop('DATASEC')
     headerout['FILENAME']=basename.format(frameno=frameno)
     headerout['BUNIT']='E-/PIXEL'
+    headerout['EGAIN']=1.0
+    headerout['ENOISE']=2.5 # average for the 4 amps in slow is 2.5 e
 
     hdul = fits.HDUList(fits.PrimaryHDU(header=headerout))
     hdul.append(fits.ImageHDU(out.astype(np.float32),
                               name='science', header=headerout))
     hdul.append(fits.ImageHDU(vout.astype(np.float32),
                               name='variance', header=headerout))
+    
     gzip='.gz' if dogzip else ''
     if do_cosmic:
         hdul.append(fits.ImageHDU(mask, name='mask'))
