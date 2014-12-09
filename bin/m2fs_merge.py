@@ -20,6 +20,9 @@ def parse_cl():
     parser.add_argument('-o', dest='outdir', default='',
                         action='store', required=False, type=str,
                         help='Out directory')
+    parser.add_argument('-z', dest='gzip', default=False,
+                 action='store', required=False, type=bool,
+                 help='gzip fits files')
     return parser.parse_args()
 
 
@@ -69,4 +72,5 @@ if __name__ =='__main__':
                 'iter':10}
         else:
             cosmic_settings=False
-        mergequad(f, do_cosmic=cosmic_settings, file=True, odir=args.outdir)
+        mergequad(f, do_cosmic=cosmic_settings, file=True, odir=args.outdir,
+                  dogzip=args.gzip)

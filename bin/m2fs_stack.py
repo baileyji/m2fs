@@ -28,6 +28,9 @@ def parse_cl():
     parser.add_argument('-o', dest='outdir', default='./',
                      action='store', required=False, type=str,
                      help='Out directory')
+    parser.add_argument('-z', dest='gzip', default=False,
+                 action='store', required=False, type=bool,
+                 help='gzip fits files')
     
     args=parser.parse_args()
     if args.outdir[-1]!=os.path.sep:
@@ -53,7 +56,7 @@ def get_seqlists(listfile):
 
 
 
-def stackimage(files,  outfile, do_cosmic=False, **crparams):
+def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
     """
     List of files to stack, output file sans extension.
     
@@ -199,11 +202,11 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
                               name='science', header=header))
     hdul.append(fits.ImageHDU(var.astype(np.float32),
                               name='variance', header=header))
-    hdul.append(fits.ImageHDU(np.sum(mask,axis=2).astype(np.uint8),
+    hdul.append(fits.ImageHDU(mask.sum(axis=2).astype(np.uint8),
                               name='crmask'))
     hdul.append(fits.ImageHDU(np.zeros_like(im,dtype=np.uint8),
                               name='bpmask'))
-    hdul.writeto(outfile+'.fits.gz')
+    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''))
 
 
 if __name__ =='__main__':
@@ -243,6 +246,6 @@ if __name__ =='__main__':
             
             print '   Stacking ',color+rangify(seqnos)
             stackimage(filestack,args.outdir+color+rangify(seqnos),
-                       do_cosmic=args.do_cosmic)
+                       gzip=args.gzip, do_cosmic=args.do_cosmic)
         except IOError as e:
             print "Couldn't stack {}".format(str(e))
