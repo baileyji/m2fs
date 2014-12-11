@@ -60,7 +60,10 @@ def parse_cl():
     #Program Settings
     parser.add_argument('-f', dest='files', default='',
                         action='store', required=False, type=str,
-                        help='Input file list')
+                        help='Input files')
+    parser.add_argument('-l', dest='listfile', default='',
+                        action='store', required=False, type=str,
+                        help='Input listfile')
     parser.add_argument('-d', dest='dir', default='./',
                         action='store', required=False, type=str,
                         help='Input file directory')
@@ -269,9 +272,12 @@ def find_focus(files, args):
         #fetch image
         header=fits.getheader(f)
         focus=header['FOCUS']
+        filt=header['FILTER']
         if os.path.basename(f)[0].lower()=='b':
+            side='b'
             tempi=[1,3,5,7,9]
         else:
+            side='r'
             tempi=[1,2,4,6,8]
         temps=tuple(header['TEMP{:02}'.format(i)] for i in tempi)
         im=fits.getdata(f)
@@ -358,23 +364,26 @@ def find_focus(files, args):
     yvals=[focus_data[f][1] for f in foc]
     cvals=[focus_data[f][2] for f in foc]
     
-    if len(foc) >1:
+    if len(foc) >2:
         cx=np.polyfit(foc, xvals, 2)
         cy=np.polyfit(foc, yvals, 2)
         min_x=-cx[1]/cx[0]/2
         min_y=-cy[1]/cy[0]/2
         print 'Processed {}'.format(files)
+        print('Filter: {}'.format(filt))
         print('Best x focus @ {:.1f} with value of {:.2f}'.format(min_x,
               np.poly1d(cx)(min_x)))
         print('Best y focus @ {:.1f} with value of {:.2f}'.format(min_y,
               np.poly1d(cy)(min_y)))
         print '{:.1f} {:.1f} {} {} {} {} {}'.format(min_x, min_y,
                                                     *focus_data[f][3])
-    for i in range(len(foc)):
-        print('Focus: {}. FWHM: {:.1f}, {:.1f}. Covar: {:.1f} Temps:{}'.format(
+    for i,f in enumerate(foc):
+        print('Focus: {} FWHM: {:.1f}, {:.1f} Covar: {:.1f} Temps:{}'.format(
               foc[i],xvals[i],yvals[i],cvals[i], focus_data[f][3]))
 
-    if len(foc) >1:
+    temps=np.array([k[3][1] for k in focus_data.values()])
+
+    if len(foc) >2:
         plt.figure(6)
         plt.plot(foc, xvals, 'bo', label='PSF x')
         plt.plot(foc, yvals, 'ro', label='PSF y')
@@ -385,12 +394,27 @@ def find_focus(files, args):
                        100)
         plt.plot(xx, np.poly1d(cx)(xx),'b')
         plt.plot(xx, np.poly1d(cy)(xx),'r')
+        plt.text(min_x,1.5,
+                 'Temp: {:.3f}\nFilter: {}'.format(temps.mean(),filt),
+                 color=side)
         plt.legend()
         plt.show(0)
 
 
     if args.debug:
         ipdb.set_trace()
+
+def get_seqnos(listfile):
+    ret=set()
+    with open(listfile,'r') as lf:
+        for l in lf:
+            if l[0] in '1234567890':
+                range=l.split()[0]
+                ret.update(map(str,derangify(range)))
+            elif len(l)>1 and l[0] in 'RBrb' and l[1] in '1234567890':
+                range=l[1:].split()[0]
+                ret.update(map(lambda x: l[0].lower()+str(x), derangify(range)))
+    return list(ret)
 
 if __name__ =='__main__':
     
@@ -399,6 +423,19 @@ if __name__ =='__main__':
     if not args.files:
         files=(glob(os.path.join(args.dir,'*.fits'))+
                glob(os.path.join(args.dir,'*.fits.gz')))
+    
+        try:
+            seqno=get_seqnos(args.listfile)
+            info=[m2fs.obs.info(f,no_load=True) for f in files]
+
+            files=[]
+            for i in info:
+                for s in seqno:
+                    if i.seqno_match(s):
+                        files.append(i.file)
+                        break
+        except IOError:
+            print 'No listfile, doing all'
     else:
         files=[os.path.join(args.dir, x) for x in args.files.split(' ')]
 

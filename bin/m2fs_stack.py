@@ -87,7 +87,7 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
         header=im[0].header
         #15 frames with float64 would be 3.7GB ram
         imcube=np.zeros(im[1].data.shape+(nfile,),dtype=np.float32)
-        if len(im) >2:
+        if len(im) >3:
             masked=True
             mask=np.zeros_like(imcube, dtype=np.bool)
         else:
@@ -196,6 +196,11 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
 
         ####### Try 3
         
+#        the correction factor as defined has a pathological edge case:
+#        if high throughput fibers or brighter targets are disproportionalty
+#        affected by clouds/field rotation, guiding errors, or the like then it
+#        would give unfair weight to that frame.
+
         corr_fac=throughput_corr*duration_corr
         patch_cube=(imcube_masked*corr_fac).mean(axis=2)
         patch_cube=patch_cube[:,:,np.newaxis]/corr_fac
