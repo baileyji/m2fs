@@ -53,7 +53,7 @@ def proc_quad(qdata, header, cosmic_settings):
 
 
 def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
-              repair=False):
+              repair=False, dogzip=False):
     """Give a seqno or a path to a quad if file set
     do_cosmic=bool or dict like
     sigma for init clip, fraction for neighbors, how much above background*
@@ -181,92 +181,29 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     vout=np.flipud(vout)
     mask=np.flipud(mask)
 
+    #make CRs count as nothing
+    out[mask.astype(bool)]=0
+    vout[mask.astype(bool)]=1e9
+    
+
     #Write out the merged file
     headerout.pop('TRIMSEC')
     headerout.pop('BIASSEC')
     headerout.pop('DATASEC')
     headerout['FILENAME']=basename.format(frameno=frameno)
     headerout['BUNIT']='E-/PIXEL'
+    headerout['EGAIN']=1.0
+    headerout['ENOISE']=2.5 # average for the 4 amps in slow is 2.5 e
 
     hdul = fits.HDUList(fits.PrimaryHDU(header=headerout))
     hdul.append(fits.ImageHDU(out.astype(np.float32),
                               name='science', header=headerout))
     hdul.append(fits.ImageHDU(vout.astype(np.float32),
                               name='variance', header=headerout))
+    
+    gzip='.gz' if dogzip else ''
     if do_cosmic:
         hdul.append(fits.ImageHDU(mask, name='mask'))
-    if not os.path.exists(odir+basename.format(frameno=frameno)+'.fits.gz'):
-        hdul.writeto(odir+basename.format(frameno=frameno)+'.fits.gz')
-
-def makesuperbias(filenos, side, name):
-    
-    f=side+'{frameno:04}.fits'
-    
-    #load first bias to get info
-    with fits.open(f.format(frameno=filenos[0])) as bias:
-        header=bias[0].header
-        superbias_data=np.zeros_like(bias[0].data,dtype=np.float32)
-    
-    #Number of bias frames
-    nbias=len(filenos)
-    
-    #Sum the bias counts
-    for num in filenos:
-        with fits.open(f.format(frameno=num)) as bias:
-            superbias_data+=bias[0].data
-    
-    #Merge bias
-    superbias_data/=nbias
-    
-    #Write out the merged file
-    hdu = fits.PrimaryHDU(superbias_data)
-    hdu.header=header
-    hdu.header['FILENAME']=name
-    hdu.header['COMMENT']=','.join(map(str,filenos))
-    hdu.writeto(name+'.fits')
-
-
-
-def makesuperflat(filenos, side, name, superbias=None):
-    
-    f=side+'{frameno:04}.fits'
-    
-    #load first flat to get info
-    with fits.open(f.format(frameno=filenos[0])) as flat:
-        header=flat[0].header
-        superflat_data=np.zeros_like(flat[0].data,dtype=np.float32)
-        nrow,ncol=superflat_data.shape
-    
-    #Number of flat frames
-    nflat=len(filenos)
-    
-    
-    #Grab the bias
-    try:
-        biasdata=fits.open(superbias)[0].data
-    except IOError:
-        biasdata=None
-    
-    #Make the datacube
-    cube=np.zeros((nrow, ncol, nflat), dtype=np.float32)
-    
-    
-    for i,num in enumerate(filenos):
-        with fits.open(f.format(frameno=num)) as flat:
-            #Remove bias
-            if biasdata != None:
-                cube[:,:,i]=flat[0].data-biasdata
-            else:
-                cube[:,:,i]=flat[0].data
-    
-    #Merge flat
-    masked=astropy.stats.sigma_clip(cube,sig=3,axis=2)
-    superflat_data=np.ma.MaskedArray.mean(masked,axis=2).data
-    
-    #Write out the superflat
-    hdu = fits.PrimaryHDU(superflat_data)
-    hdu.header=header
-    hdu.header['FILENAME']=name
-    hdu.header['COMMENT']=','.join(map(str,filenos))+',Bias:'+str(superbias)
-    hdu.writeto(name+'.fits')
+    if not os.path.exists(odir+basename.format(frameno=frameno)+'.fits'+gzip):
+        hdul.writeto(odir+basename.format(frameno=frameno)+'.fits'+gzip)
 

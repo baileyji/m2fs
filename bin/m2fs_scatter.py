@@ -46,7 +46,7 @@ def parse_cl():
 def add_scatter(f, debug=False, plot=True, thresh=.7, glow=True, offset=0,
                 glowOnly=False):
     hdul=fits.open(f, mode='update')
-    s_im, err, (s_model, im_masked, glow) =mkscatter(hdul[1].data, plot=plot,
+    s_im, err, (s_model, im_masked, glowout) =mkscatter(hdul[1].data, plot=plot,
                                                      debug=debug,
                                                      scatter_thresh=thresh,
                                                      header=hdul[1].header,
@@ -60,6 +60,10 @@ def add_scatter(f, debug=False, plot=True, thresh=.7, glow=True, offset=0,
         hdul[2].data+=err**2
         hdul.insert(3, fits.ImageHDU(s_im.astype(np.float32), name='scatter'))
         hdul[3].header['SVAR']=err**2
+        hdul[3].header['THRESH']=thresh
+        hdul[3].header['GLOW']=str(glow)
+        hdul[3].header['GLOWONLY']=str(glowOnly)
+        hdul[3].header['OFFSET']=str(offset)
     hdul.close()
 
 

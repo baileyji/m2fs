@@ -28,6 +28,9 @@ def parse_cl():
     parser.add_argument('-o', dest='outdir', default='./',
                      action='store', required=False, type=str,
                      help='Out directory')
+    parser.add_argument('-z', dest='gzip', default=False,
+                 action='store', required=False, type=bool,
+                 help='gzip fits files')
     
     args=parser.parse_args()
     if args.outdir[-1]!=os.path.sep:
@@ -53,7 +56,7 @@ def get_seqlists(listfile):
 
 
 
-def stackimage(files,  outfile, do_cosmic=False, **crparams):
+def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
     """
     List of files to stack, output file sans extension.
     
@@ -64,6 +67,17 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     summed cr mask
     bad pixel mask
     
+    
+    So this is pretty far afield from what it should be
+    
+    ci= estimate of total frame throughput relative to frame with most
+    n = number of frames
+    k=number of corrupted frames at given pixel
+    
+    s = (n+k)/n * sum(pixel_i/ci)
+    v = ((n+k)/n)^2 sum((pixel_i+rn^2)/ci^2)
+    
+    
     """
 
     
@@ -73,7 +87,7 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
         header=im[0].header
         #15 frames with float64 would be 3.7GB ram
         imcube=np.zeros(im[1].data.shape+(nfile,),dtype=np.float32)
-        if len(im) >2:
+        if len(im) >3:
             masked=True
             mask=np.zeros_like(imcube, dtype=np.bool)
         else:
@@ -95,10 +109,8 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
                 airmasses.append(im[0].header['AIRMASS'])
                 etimes.append(float(im[0].header['EXPTIME']))
                 members.append(im[0].header['FILENAME'])
-                if etimes[-1]!=0.0:
-                    imcube[:,:,i]=im[1].data/etimes[-1]
-                else:
-                    imcube[:,:,i]=im[1].data
+
+                imcube[:,:,i]=im[1].data
                 varcube[:,:,i]=im[2].data
 
                 if masked:
@@ -129,14 +141,19 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
 #                if last_utend<end: last_utend=end
 
                 #import ipdb;ipdb.set_trace() #midpoints untested
-                if masked:
-                    midpoint_weights.append(im[2].data[msk].sum())
-                else:
-                    midpoint_weights.append(im[2].data.sum())
+
 
     except ValueError as e:
         print "ValueError while merging:", files,f
         return
+
+
+    if masked:
+        use=~mask.sum(2).astype(bool)
+        midpoint_weights=[im.T[use].sum() for im in imcube.T]
+    else:
+        midpoint_weights=[im.sum() for im in imcube.T]
+
 
     mean_airmass=np.mean(airmasses)
     min_midpoint=min(midpoints)
@@ -147,24 +164,67 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
 
     exptime=sum(etimes)
 
+
     if not masked:
         #Time to reject cosmic rays
         clipped=crreject(imcube, **crparams)
         im=imcube.mean(axis=2)
         var=np.ma.array(varcube,mask=clipped.mask).sum(axis=2)
     else:
+        
         #Create masked arrays
-        #Average the data count rates wieghted by the variance
         imcube_masked=np.ma.array(imcube, mask=mask)
-        if exptime != 0.0:
-            im=np.ma.average(imcube_masked, axis=2,
-                             weights=varcube)#/np.array(etimes))
-        else:
-            im=np.ma.average(imcube_masked, axis=2)
-        im=im.filled(float(0))
-        im*=exptime
-        #Sum the variance frames
-        var=np.ma.array(varcube,mask=mask).sum(axis=2).filled(float('nan'))
+        varcube_masked=np.ma.array(varcube, mask=mask)
+        
+        duration_corr=max(etimes)/np.array(etimes)
+        
+        throughput_corr=np.array(midpoint_weights)/np.array(etimes)
+        throughput_corr=throughput_corr.max()/throughput_corr
+        
+
+        #Have correction factors
+        #s = n/(n-k) * sum(pixel_i * duration_corr*throughput_corr)
+        
+#        mask_corr=nfile/(nfile-mask.sum(axis=2).astype(float))
+#
+#        im=mask_corr*(imcube_masked*throughput_corr*duration_corr).sum(axis=2)
+#        im=im.filled(0.0)
+#
+#        var=mask_corr**2 * (varcube_masked*
+#                            (throughput_corr*duration_corr)**2).sum(axis=2)
+#        var=var.filled(1e99)
+
+        ####### Try 3
+        
+#        the correction factor as defined has a pathological edge case:
+#        if high throughput fibers or brighter targets are disproportionalty
+#        affected by clouds/field rotation, guiding errors, or the like then it
+#        would give unfair weight to that frame.
+
+        corr_fac=throughput_corr*duration_corr
+        patch_cube=(imcube_masked*corr_fac).mean(axis=2)
+        patch_cube=patch_cube[:,:,np.newaxis]/corr_fac
+        imcube[mask]=patch_cube[mask]
+        im=imcube.sum(axis=2)
+        
+        var=varcube_masked.sum(axis=2).filled(1e99)
+        var*=(im/imcube_masked.sum(axis=2))**2
+        
+        bad=((~mask).sum(axis=2)==0) | (~np.isfinite(im)) | (~np.isfinite(var))
+        
+        im[bad]=0.0
+        var[bad]=1e99
+
+
+        #hack for a couple of bad rows
+        if 'r' in header['FILENAME'] and header['BINNING']=='1x1':
+            var[:2056,821]=1e99
+
+#        import ipdb;ipdb.set_trace()
+        ######
+
+
+
 
     #Update the header
     header['FILENAME']=os.path.basename(outfile)
@@ -175,9 +235,10 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
     header['UT-END']=str(last_utend)
     header['AIRMASS']=mean_airmass
     
-    print('Setting noise and gain to 0 & 1')
+    print('Setting read noise and to approximate value. '
+          'Use variance frame for exact value')
     header['EGAIN']=1.0
-    header['ENOISE']=0.0
+    header['ENOISE']=np.sqrt(nfile)*2.5 # average for the 4 amps in slow is 2.5 e
     
     #Create a primary extension with header only
     #   (this seems to be a fits convention)
@@ -188,11 +249,11 @@ def stackimage(files,  outfile, do_cosmic=False, **crparams):
                               name='science', header=header))
     hdul.append(fits.ImageHDU(var.astype(np.float32),
                               name='variance', header=header))
-    hdul.append(fits.ImageHDU(np.sum(mask,axis=2).astype(np.uint8),
+    hdul.append(fits.ImageHDU(mask.sum(axis=2).astype(np.uint8),
                               name='crmask'))
     hdul.append(fits.ImageHDU(np.zeros_like(im,dtype=np.uint8),
                               name='bpmask'))
-    hdul.writeto(outfile+'.fits.gz')
+    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''))
 
 
 if __name__ =='__main__':
@@ -232,6 +293,6 @@ if __name__ =='__main__':
             
             print '   Stacking ',color+rangify(seqnos)
             stackimage(filestack,args.outdir+color+rangify(seqnos),
-                       do_cosmic=args.do_cosmic)
+                       gzip=args.gzip, do_cosmic=args.do_cosmic)
         except IOError as e:
             print "Couldn't stack {}".format(str(e))
