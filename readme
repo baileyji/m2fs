@@ -1,0 +1,3 @@
+git+https://github.com/sczesla/PyAstronomy/tarball/v_0-7-0#egg=PyAstronomy-0.7
+-e git+https://github.com/baileyji/jbastro/tarball/v0.3#egg=jbastro-0.3
+-e .
