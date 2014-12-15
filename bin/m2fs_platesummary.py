@@ -1,27 +1,83 @@
 #!/usr/bin/python
-from m2fs.plate import summarize
-import sys, glob
+import numpy as np
+from hole_mapper import plate
+from hole_mapper import pathconf
 
-target=summarize.target
+def floatable(x):
+    try:
+        float(x)
+    except ValueError:
+        return False
+    return True
 
-extra=[
-target('HD223311','23 49 14.1','-06 18 20'),
-target('HIP48331','09 51 06.68','-43 30 05.9'),
-target('HIP10798','02 18 58.65','-25 56 48.4'),
-target('EG21','03 10 30.98','-68 36 02.2')
-]
+def summarize_plates():
+    """
+    Grab all the plates in the plate directory and print out info.
+    
+    List name, number of fields, number of holes
+        list field name, RA/Dec, number of targs, number of skys, minsky,mustkeep, status min/max/mean mags
+        
+    Grab all the setups from the setup files
+    for each setup file
+        list setup file name, number of setups
+            for each setup in file
+                list setup name, setup settings, if a fibermap is present
+                
+    """
+    pnames=plate.get_all_plate_names()
+    nlen=min(max(map(len,pnames)), 25)
+    namefmt='{:'+'{}'.format(nlen)+'}'
+    lines=[]
+    for pname in pnames:
+        p=plate.get_plate(pname)
+        lines.append((namefmt+' {} Field(s), {:4} holes').format(pname, len(p.fields),
+                                                        len(p.all_holes)))
+        
+        
+        #field name string length
+        fnames=[f.name for f in p.fields]
+        nlen=min(max(map(len,fnames)), 25)
+        fnamefmt='{:'+'{}'.format(nlen)+'}'
+        
+        #magnitude keys
+        magkey=list(set(k for f in p.fields for t in f.targets
+                        for k in t.user.keys()
+                        if k in ['v','b','r','g','i'] or 'mag' in k))
+
+        indent='   '
+        fmt=(indent+fnamefmt+'  {}  {:4}  {:3}  {:3}  {}'+'  {:4}'*len(magkey))
+        lines.append(fmt.format('Field', 'RA Dec', 'N Targ', 'N Sky', 'minsky',
+                         'mustkeep', *magkey))
+                         
+
+
+        for f in p.fields:
+        
+            mags=[np.array([float(t.user[k]) for t in f.targets if k in t.user and floatable(t.user[k])]) for k in magkey]
+             
+            for m in mags:m[(m<5) | (m > 30)]=np.nan
+            meanmag=[np.nanmean(m) for m in mags]
+
+            meanmag=['{:2.1f}'.format(m) for m in meanmag]
+        
+            lines.append(fmt.format(f.name, f.info['(ra, dec)'],
+                  len(f.targets), len(f.skys), f.info.get('minsky',0),
+                  f.info.get('mustkeep', False), *meanmag))
+
+
+    return lines
+
+
 
 
 if __name__ == '__main__':
     
     if len(sys.argv) >2 :
-        dir=sys.argv[1]
-        fname=sys.argv[2]
-    else:
-        dir='./'
-        fname=sys.argv[1]
-    sfile=fname+'_summ.txt'
-    tfile=fname+'_tlist.txt'
-    files = glob.glob(dir+'*.plate')
-    trec=summarize.write_summary_file(sfile, files)
-    summarize.write_target_list(tfile, trec+extra)
+        pathconf.ROOT=sys.argv[1]
+
+    lines=summarize_plates()
+    for line in lines:
+        print line
+
+
+    

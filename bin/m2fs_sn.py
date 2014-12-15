@@ -156,6 +156,8 @@ def compute_sn(file, args):
     plt.xlim(0,fim.shape[0])
     plt.show(0)
     print 'Median S/N: {:.0f}'.format(np.median(sns))
+    print('{:4}   {}'.format('Row', 'S/N'))
+    for x,sn in zip(peaks,sns): print('{:4}   {:.0f}'.format(x,sn))
 
 #    if args.debug:
 #        input=raw_input('Continue(any), Abort(a), Debug(db)>')

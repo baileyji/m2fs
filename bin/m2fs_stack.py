@@ -31,7 +31,10 @@ def parse_cl():
     parser.add_argument('-z', dest='gzip', default=False,
                  action='store', required=False, type=bool,
                  help='gzip fits files')
-    
+    parser.add_argument('-t', dest='dry_run', default=False,
+                 action='store', required=False, type=bool,
+                 help='Test, dont do anything')
+
     args=parser.parse_args()
     if args.outdir[-1]!=os.path.sep:
         args.outdir+=os.path.sep
@@ -287,12 +290,17 @@ if __name__ =='__main__':
                          key=lambda x: seqnos.__getitem__(filestack.index(x)) )
         color=m2fs.obs.info(filestack[0], no_load=True).side
         try:
-            if (os.path.exists(args.outdir+color+rangify(seqnos)+'.fits') or
-                os.path.exists(args.outdir+color+rangify(seqnos)+'.fits.gz')):
+            if (os.path.exists(args.outdir+color+
+                               rangify(seqnos,delim='_')+'.fits') or
+                os.path.exists(args.outdir+color+
+                               rangify(seqnos,delim='_')+'.fits.gz')):
                 continue
             
             print '   Stacking ',color+rangify(seqnos)
-            stackimage(filestack,args.outdir+color+rangify(seqnos),
-                       gzip=args.gzip, do_cosmic=args.do_cosmic)
+            if not args.dry_run:
+                stackimage(filestack, args.outdir+color+
+                           rangify(seqnos,delim='_'),
+                           gzip=args.gzip, do_cosmic=args.do_cosmic)
+
         except IOError as e:
             print "Couldn't stack {}".format(str(e))

@@ -75,15 +75,19 @@ if __name__ == '__main__':
     
     if args.add:
         add_scatter(file, debug=args.debug, plot=not args.silent,
-                    thresh=args.threshold, glow=args.glow, offset=args.offset)
+                    thresh=args.threshold, glow=args.glow, offset=args.offset,
+                    glowOnly=args.glowonly)
     else:
         if len(sys.argv) >2:
             ofile=sys.argv[2]
         else:
             print ' Output file not specified'
             raise ValueError
-        s_im, err =mkscatter(fits.getdata(file), thresh=args.threshold,
-                             glow=args.glow)
+        s_im, err =mkscatter(fits.getdata(file), scatter_thresh=args.threshold,
+                             debug=args.debug,
+                             plot=not args.silent, header=fits.getheader(file),
+                             do_glow=args.glow, offset=args.offset,
+                             glowOnly=args.glowonly)
 
         if ofile==file:
             ofile+='.scatter.fits.gz'
