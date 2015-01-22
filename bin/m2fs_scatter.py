@@ -23,7 +23,7 @@ def parse_cl():
     parser.add_argument('-s', dest='silent', default=False,
                      action='store_true', required=False,
                      help='Work quietly')
-    parser.add_argument('-t', dest='threshold', default=.7,
+    parser.add_argument('-t', dest='threshold', default=1.5,
                      action='store', required=False, type=float,
                      help='Scattering threshold')
     parser.add_argument('-g', '--noglow', dest='glow', default=True,
@@ -44,20 +44,25 @@ def parse_cl():
 
 
 def add_scatter(f, debug=False, plot=True, thresh=.7, glow=True, offset=0,
-                glowOnly=False):
+                glowOnly=False, noprompt=False):
     hdul=fits.open(f, mode='update')
-    s_im, err, (s_model, im_masked, glowout) =mkscatter(hdul[1].data, plot=plot,
-                                                     debug=debug,
-                                                     scatter_thresh=thresh,
-                                                     header=hdul[1].header,
-                                                     do_glow=glow,
-                                                     offset=offset,
-                                                     glowOnly=glowOnly)
+    s_im, err, (s_model, im_masked, glowout) =mkscatter(hdul[1].data,
+                                                        hdul[2].data,
+                                                        plot=plot,
+                                                        debug=debug,
+                                                        scatter_thresh=thresh,
+                                                        header=hdul[1].header,
+                                                        do_glow=glow,
+                                                        offset=offset,
+                                                        glowOnly=glowOnly)
 
-    input=raw_input('Ok? ').lower() if plot or debug else 'y'
+    if not noprompt:
+        input=raw_input('Ok? ').lower() if plot or debug else 'y'
+    else:
+        input='y'
     if input in ['y', 'yes']:
         hdul[1].data-=s_im
-        hdul[2].data+=err**2
+        #hdul[2].data+=err**2
         hdul.insert(3, fits.ImageHDU(s_im.astype(np.float32), name='scatter'))
         hdul[3].header['SVAR']=err**2
         hdul[3].header['THRESH']=thresh
@@ -76,14 +81,15 @@ if __name__ == '__main__':
     if args.add:
         add_scatter(file, debug=args.debug, plot=not args.silent,
                     thresh=args.threshold, glow=args.glow, offset=args.offset,
-                    glowOnly=args.glowonly)
+                    glowOnly=args.glowonly, noprompt=args.silent)
     else:
         if len(sys.argv) >2:
             ofile=sys.argv[2]
         else:
             print ' Output file not specified'
             raise ValueError
-        s_im, err =mkscatter(fits.getdata(file), scatter_thresh=args.threshold,
+        s_im, err =mkscatter(fits.getdata(file,1),fits.getdata(file,2),
+                             scatter_thresh=args.threshold,
                              debug=args.debug,
                              plot=not args.silent, header=fits.getheader(file),
                              do_glow=args.glow, offset=args.offset,
