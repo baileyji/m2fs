@@ -23,7 +23,7 @@ def parse_cl():
     parser.add_argument('-d', dest='sep', default=10,
                         action='store', required=False, type=int,
                         help='Minimum delta between order peaks')
-    parser.add_argument('-m', dest='min', default=50,
+    parser.add_argument('-m', dest='min', default=12,
                         action='store', required=False, type=int,
                         help='Minimum peak intensity')
     parser.add_argument('-w', dest='xw', default=25,
@@ -34,6 +34,14 @@ def parse_cl():
     parser.add_argument('-s', dest='hwid', default=8.0,
                         action='store', required=False, type=int,
                         help='Width to either side of smash')
+
+    parser.add_argument('-c', dest='min_sn', default=0,
+                        action='store', required=False, type=int,
+                        help='Minimum S/N cut')
+
+    parser.add_argument('--tpdat', dest='tpdat', default=False,
+                        action='store_true', required=False,
+                        help='give numbers needed for throughput checking')
 
     return parser.parse_args()
 
@@ -109,6 +117,8 @@ def compute_sn(file, args):
 
     fim=hdu['SCIENCE'].data
     vfim=hdu['VARIANCE'].data
+    etime=hdu[0].header['EXPTIME']
+    rotv=hdu[0].header['ROTANGLE']
     
     ncol=fim.shape[1]
     c0=ncol/2 - 2*.02*ncol
@@ -134,30 +144,40 @@ def compute_sn(file, args):
 
     #Smash peaks
     sns=[]
+    peakdat=[]
     for i,x in enumerate(peaks):
 #        cent=ret[x]['param'][1]
         cent=x
         sl=slice(cent-smashw,(cent+1)+smashw)
         sn=im[sl].sum()/np.sqrt(vim[sl].sum())
-        sns.append(sn)
+
         
-        plt.text(x ,1.01*im[x], '{:.0f}'.format(sn))
+        if sn > args.min_sn:
+            peakdat.append(x)
+            sns.append(sn)
+            plt.text(x ,1.01*im[x], '{:.0f}'.format(sn))
 
-        plt.gca().add_patch(matplotlib.patches.Rectangle((x-smashw,0),
-                                                   2*smashw+1, im[x],
-                                                   alpha=.2))
+            plt.gca().add_patch(matplotlib.patches.Rectangle((x-smashw,0),
+                                                       2*smashw+1, im[x],
+                                                       alpha=.2))
 
-
-    plt.title('Average of {:.0f} pixels at at {:.0f}'.format(c1-c0,.5*(c0+c1))+
+    plt.title('{}\nAverage of {:.0f} pixels at at {:.0f}'.format(os.path.basename(file),
+                                                                 c1-c0,.5*(c0+c1))+
               '  Median S/N {:.0f}'.format(np.median(sns)))
     plt.xlabel('Row (R1-01/B8-01 to left)')
     plt.ylabel('electrons')
     plt.axhline(minv)
     plt.xlim(0,fim.shape[0])
     plt.show(0)
-    print 'Median S/N: {:.0f}'.format(np.median(sns))
-    print('{:4}   {}'.format('Row', 'S/N'))
-    for x,sn in zip(peaks,sns): print('{:4}   {:.0f}'.format(x,sn))
+    print 'Mean/Median/Std S/N: {:.0f}/{:.0f}/{:.0f}'.format(np.mean(sns),
+                                                             np.median(sns),
+                                                             np.std(sns))
+        
+    if args.tpdat:
+        print 'Rotator value: {:.2f}'.format(rotv)
+        print('{:4}   {}'.format('Row', 'e-/s'))
+        for x,sn in zip(peakdat,sns):
+            print('{:<4} {:.3f}'.format(x,sn**2/etime))
 
 #    if args.debug:
 #        input=raw_input('Continue(any), Abort(a), Debug(db)>')
