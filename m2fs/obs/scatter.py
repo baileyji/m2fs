@@ -6,7 +6,8 @@ from astropy.io import fits
 from scipy.ndimage import median_filter
 from matplotlib.pyplot import *
 
-
+import scipy.signal as sp_sig
+from scipy.interpolate import UnivariateSpline
 from scipy.ndimage.filters import gaussian_filter as gsmooth2d
 import numpy as np
 import matplotlib.pyplot as plt
@@ -112,7 +113,7 @@ def make_glow_model(im_in, bin_x=1, bin_y=1):
 
 
 
-def mkscatter(im_in, plot=False, scatter_thresh=.7, debug=False, header=None,
+def mkscatter(im_in, var_im, plot=False, scatter_thresh=.7, debug=False, header=None,
               do_glow=True, offset=0, glowOnly=False):
     """Make a scattered light map"""
 
@@ -124,9 +125,11 @@ def mkscatter(im_in, plot=False, scatter_thresh=.7, debug=False, header=None,
         import ipdb;ipdb.set_trace()
 
     if header!=None:
-        print('WARNING: Non 1x1 image, check results carefully.')
         bin_x, bin_y=int(header['BINNING'][0]), int(header['BINNING'][-1])
+        if bin_x!=1 and bin_y!=1:
+            print('WARNING: Non 1x1 image, check results carefully.')
     else:
+        print('WARNING: No header assuming 1x1 image, check results carefully.')
         bin_x, bin_y=1, 1
 
 
@@ -168,11 +171,18 @@ def mkscatter(im_in, plot=False, scatter_thresh=.7, debug=False, header=None,
     #y, x = np.mgrid[:im_masked.shape[0], :im_masked.shape[1]]
     #p = f(p_init, x, y, im_masked)
 
-    #Create a masked image that includes all pixels within 1 scattered
-    #light stddev of the mean scattered light level. Subtracting off the glow
-    im_masked=np.ma.array(im_in-glow, copy=True,
-                          mask=abs(im_in-glow-s_pix.mean())>
-                                scatter_thresh*s_std)
+
+    
+    #median filter to figure out patch values for bad pixels
+    # (e.g. excessive variance)
+    patch_im=sp_sig.medfilt2d(im_in,5)
+    patch_spot=(var_im>1e6)
+    im_in[patch_spot]=patch_im[patch_spot]
+
+    #Create a masked image that includes all pixels within X stddevs
+    # of the mean scattered light level, excluding the glow
+    im_mask=((abs(im_in-glow-s_pix.mean()) >scatter_thresh*s_std))
+    im_masked=np.ma.array(im_in-glow, copy=True, mask=im_mask)
 
     s_model=im_in.copy()
 
@@ -182,12 +192,20 @@ def mkscatter(im_in, plot=False, scatter_thresh=.7, debug=False, header=None,
 
     #Model each column with a polynomial fit to the masked image
     for c in cols:
-        s_model[:,c]=np.poly1d(np.ma.polyfit(rows, im_masked[:,c],8))(rows)
+        s_model[:,c]=np.poly1d(np.ma.polyfit(rows, im_masked[:,c], 8))(rows)
 
+    s_modelraw=s_model.copy()
     if not glowOnly:
         #Smooth the model & add the glow to make the scattered light image
-        s_im=gsmooth2d(s_model,(8,32)) + glow
+        s_model=gsmooth2d(s_model,(32,64)) #32 ~1.5 fiber separations
+        
+#        Model each row with a polynomial fit to the modeled columns
+#        col_weights=1/var_im.sum(0)
+#        for r in rows:
+#            s_model[r,:]=np.poly1d(np.ma.polyfit(cols, s_model[r,:],8,
+#                                    w=col_weights))(cols)
 
+        s_im=s_model+glow
         err=(im_masked-s_im).std()
     else:
         s_im=glow
@@ -198,27 +216,30 @@ def mkscatter(im_in, plot=False, scatter_thresh=.7, debug=False, header=None,
         plt.figure(1)
         cmap=plt.cm.jet
         cmap.set_bad('black')
-        plt.imshow(im_masked, vmin=im_masked.min(),
-                   vmax=im_masked.mean()+2*im_masked.std(),
-                   cmap=cmap,origin='lower')
+        im_vmin=im_masked.min()
+        im_vmax=im_masked.mean()+2*im_masked.std()
+        plt.imshow(im_masked, vmin=im_vmin, vmax=im_vmax,
+                   cmap=cmap, origin='lower')
         plt.title('scatter data')
         plt.colorbar()
         
-#        plt.figure(2)
-#        plt.imshow(s_model, vmin=s_model.min(),
-#                   vmax=s_model.mean()+2*s_model.std())
-#        plt.title('c')
-#        plt.colorbar()
+        plt.figure(2)
+        plt.imshow(s_modelraw, vmin=0, vmax=s_modelraw.max(),
+                   origin='lower')
+        plt.title('raw polys')
+        plt.colorbar()
 
         plt.figure(3)
         vmax_scatter=s_im.mean()+2*s_im.std()
-        plt.imshow(s_im, vmin=s_im.min(), vmax=vmax_scatter, origin='lower')
+        plt.imshow(s_im, vmin=0, vmax=vmax_scatter, origin='lower')
         plt.title('model')
         plt.colorbar()
         
         plt.figure(4)
         clean=im_in-s_im
-        plt.imshow(clean, vmin=0, vmax=vmax_scatter, origin='lower')
+#        im_vmin=0
+#        im_vmax=vmax_scatter
+        plt.imshow(clean, vmin=im_vmin, vmax=im_vmax, origin='lower')
         plt.title('cleaned')
         plt.colorbar()
         
