@@ -1,5 +1,6 @@
 #!/usr/bin/env python2.7
 import numpy as np
+import sys
 from astropy.io import fits
 import re
 import pylab as pl
@@ -20,7 +21,7 @@ def parse_cl():
                      action='store', required=False, type=str,
                      help='source dir for files',default='./')
     parser.add_argument('-l','--listfile', dest='listfile', default='',
-                     action='store', required=True, type=str,
+                     action='store', required=False, type=str,
                      help='testfile with files to proces')
     parser.add_argument('--crreject', dest='do_cosmic', default=False,
                      action='store_true', required=False,
@@ -29,10 +30,16 @@ def parse_cl():
                      action='store', required=False, type=str,
                      help='Out directory')
     parser.add_argument('-z', dest='gzip', default=False,
-                 action='store', required=False, type=bool,
+                 action='store_true', required=False,
                  help='gzip fits files')
+    parser.add_argument('-s', dest='single', default='',
+                 action='store', required=False, type=str,
+                 help='Single file to update')
+    parser.add_argument('--overwrite', dest='clobber', default=False,
+                 action='store_true', required=False,
+                 help='Overwite existing files')
     parser.add_argument('-t', dest='dry_run', default=False,
-                 action='store', required=False, type=bool,
+                 action='store_true', required=False,
                  help='Test, dont do anything')
 
     args=parser.parse_args()
@@ -41,7 +48,6 @@ def parse_cl():
     if args.dir[-1]!=os.path.sep:
         args.dir+=os.path.sep
     return args
-
 
 def get_seqlists(listfile):
     ret=set()
@@ -56,10 +62,25 @@ def get_seqlists(listfile):
                                   derangify(range))))
     return list(ret)
 
+def compute_patch_val(variances):
+    patch_val=max(1.05*variances.max(), 1e8)
+    if patch_val>=1e38:
+        print('WARNING: Real variances {}'.format(patch_val)+
+              'exceed maximum bad variance patch value (1e38) for float32!')
+    return min(patch_val,1e38)
 
+def mask_problem_spots(var, header, mask_val=1e35):
+    if 'r' in header['FILENAME']:
+        if header['BINNING']=='1x1':
+            var[:2056,821]=mask_val
+        if header['BINNING']=='2x2':
+            var[:2056,410]=mask_val
+    if 'b' in header['FILENAME'] and header['BINNING']=='1x1':
+        var[328,:2048]=mask_val
+        var[1600:2056,2518]=mask_val
 
-
-def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
+def stackimage(files, outfile,  gzip=False, do_cosmic=False, clobber=False,
+               **crparams):
     """
     List of files to stack, output file sans extension.
     
@@ -70,20 +91,7 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
     summed cr mask
     bad pixel mask
     
-    
-    So this is pretty far afield from what it should be
-    
-    ci= estimate of total frame throughput relative to frame with most
-    n = number of frames
-    k=number of corrupted frames at given pixel
-    
-    s = (n+k)/n * sum(pixel_i/ci)
-    v = ((n+k)/n)^2 sum((pixel_i+rn^2)/ci^2)
-    
-    
     """
-
-    
     nfile=len(files)
     #load first bias to get info
     with fits.open(files[0]) as im:
@@ -145,11 +153,9 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
 
                 #import ipdb;ipdb.set_trace() #midpoints untested
 
-
     except ValueError as e:
         print "ValueError while merging:", files,f
         return
-
 
     if masked:
         use=~mask.sum(2).astype(bool)
@@ -168,66 +174,57 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
     exptime=sum(etimes)
 
 
-    if not masked:
+    if not masked and do_cosmic:
         #Time to reject cosmic rays
         clipped=crreject(imcube, **crparams)
-        im=imcube.mean(axis=2)
-        var=np.ma.array(varcube,mask=clipped.mask).sum(axis=2)
-    else:
-        
-        #Create masked arrays
-        imcube_masked=np.ma.array(imcube, mask=mask)
-        varcube_masked=np.ma.array(varcube, mask=mask)
-        
-        duration_corr=max(etimes)/np.array(etimes)
-        
-        throughput_corr=np.array(midpoint_weights)/np.array(etimes)
-        throughput_corr=throughput_corr.max()/throughput_corr
-        
+        mask=clipped.mask
+    elif not masked:
+        mask=np.zeros_like(imcube, dtype=bool)
 
-        #Have correction factors
-        #s = n/(n-k) * sum(pixel_i * duration_corr*throughput_corr)
-        
-#        mask_corr=nfile/(nfile-mask.sum(axis=2).astype(float))
-#
-#        im=mask_corr*(imcube_masked*throughput_corr*duration_corr).sum(axis=2)
-#        im=im.filled(0.0)
-#
-#        var=mask_corr**2 * (varcube_masked*
-#                            (throughput_corr*duration_corr)**2).sum(axis=2)
-#        var=var.filled(1e99)
+    #this code issues warnings like crazy, but the math is ok because of a
+    #final pass collecitng all the garbage
 
-        ####### Try 3
-        
-#        the correction factor as defined has a pathological edge case:
-#        if high throughput fibers or brighter targets are disproportionalty
-#        affected by clouds/field rotation, guiding errors, or the like then it
-#        would give unfair weight to that frame.
+    #Create masked arrays
+    imcube_masked=np.ma.array(imcube, mask=mask)
+    varcube_masked=np.ma.array(varcube, mask=mask)
+    
+    duration_corr=max(etimes)/np.array(etimes)
+    
+    throughput_corr=np.array(midpoint_weights)/np.array(etimes)
+    throughput_corr=throughput_corr.max()/throughput_corr
 
-        corr_fac=throughput_corr*duration_corr
-        patch_cube=(imcube_masked*corr_fac).mean(axis=2)
-        patch_cube=patch_cube[:,:,np.newaxis]/corr_fac
-        imcube[mask]=patch_cube[mask]
-        im=imcube.sum(axis=2)
-        
-        var=varcube_masked.sum(axis=2).filled(1e99)
-        var*=(im/imcube_masked.sum(axis=2))**2
-        
-        bad=((~mask).sum(axis=2)==0) | (~np.isfinite(im)) | (~np.isfinite(var))
-        
-        im[bad]=0.0
-        var[bad]=1e99
+    ####### Try 3
+    
+    #the correction factor as defined has a pathological edge case:
+    #if high throughput fibers or brighter targets are disproportionalty
+    #affected by clouds/field rotation, guiding errors, or the like then it
+    #would give unfair weight to that frame.
 
+    corr_fac=throughput_corr*duration_corr
+    patch_cube=(imcube_masked*corr_fac).mean(axis=2)
+    patch_cube=patch_cube[:,:,np.newaxis]/corr_fac
+    imcube[mask]=patch_cube[mask]
+    im=imcube.sum(axis=2)
 
-        #hack for a couple of bad rows
-        if 'r' in header['FILENAME'] and header['BINNING']=='1x1':
-            var[:2056,821]=1e99
+    #fill value doesn't matter as mask check below will flag and cause patch
+    var=varcube_masked.sum(axis=2).filled(0)
+    var*=(im/imcube_masked.sum(axis=2))**2
+    
+    mask_problem_spots(var, header, mask_val=np.nan)
 
-#        import ipdb;ipdb.set_trace()
-        ######
+    im=im.astype(np.float32)
+    var=var.astype(np.float32)
 
+    bad=(mask.all(axis=2) | (~np.isfinite(im)) | (~np.isfinite(var)))
+    
+    patch_val=compute_patch_val(var[~bad])
+    im[bad]=0.0
+    var[bad]=patch_val
 
-
+    if (~np.isfinite(var)).any():
+        import ipdb;ipdb.set_trace()
+    if (~np.isfinite(im)).any():
+        import ipdb;ipdb.set_trace()
 
     #Update the header
     header['FILENAME']=os.path.basename(outfile)
@@ -237,6 +234,7 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
     header['UT-TIME']=str(first_uttime)
     header['UT-END']=str(last_utend)
     header['AIRMASS']=mean_airmass
+    header['PATCHVAL']=patch_val
     
     print('Setting read noise and to approximate value. '
           'Use variance frame for exact value')
@@ -248,20 +246,35 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, **crparams):
     hdul = fits.HDUList(fits.PrimaryHDU(header=header))
     
     #Append image extensions
-    hdul.append(fits.ImageHDU(im.astype(np.float32),
-                              name='science', header=header))
-    hdul.append(fits.ImageHDU(var.astype(np.float32),
-                              name='variance', header=header))
+    hdul.append(fits.ImageHDU(im, name='science', header=header))
+    hdul.append(fits.ImageHDU(var, name='variance', header=header))
     hdul.append(fits.ImageHDU(mask.sum(axis=2).astype(np.uint8),
                               name='crmask'))
     hdul.append(fits.ImageHDU(np.zeros_like(im,dtype=np.uint8),
                               name='bpmask'))
-    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''))
+    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''), clobber=clobber)
 
+
+
+def update_single(file, outfile,  gzip=False, do_cosmic=False, clobber=False,
+                  **extra):
+    hdul=fits.open(file)
+    mv=compute_patch_val(hdul['VARIANCE'].data)
+    mask_problem_spots(hdul['VARIANCE'].data,
+                       hdul['SCIENCE'].header, mask_val=mv)
+    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''), clobber=clobber)
 
 if __name__ =='__main__':
     
     args=parse_cl()
+    
+    if args.single:
+        outf=os.path.join(args.outdir,
+                          os.path.basename(args.single).replace('.fits',''))
+        update_single(args.single, outf,
+                           gzip=args.gzip, clobber=args.clobber)
+        sys.exit()
+    
     
     files=[os.path.join(dirpath, f)
             for dirpath, dirnames, files in os.walk(args.dir)
@@ -290,17 +303,19 @@ if __name__ =='__main__':
                          key=lambda x: seqnos.__getitem__(filestack.index(x)) )
         color=m2fs.obs.info(filestack[0], no_load=True).side
         try:
-            if (os.path.exists(args.outdir+color+
-                               rangify(seqnos,delim='_')+'.fits') or
-                os.path.exists(args.outdir+color+
-                               rangify(seqnos,delim='_')+'.fits.gz')):
+            if ((os.path.exists(args.outdir+color+
+                                rangify(seqnos,delim='_')+'.fits') or
+                 os.path.exists(args.outdir+color+
+                                rangify(seqnos,delim='_')+'.fits.gz')) and not
+                args.clobber):
                 continue
             
             print '   Stacking ',color+rangify(seqnos)
             if not args.dry_run:
                 stackimage(filestack, args.outdir+color+
                            rangify(seqnos,delim='_'),
-                           gzip=args.gzip, do_cosmic=args.do_cosmic)
+                           gzip=args.gzip, do_cosmic=args.do_cosmic,
+                           clobber=args.clobber)
 
         except IOError as e:
             print "Couldn't stack {}".format(str(e))
