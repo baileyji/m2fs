@@ -4,7 +4,7 @@ from distutils.core import setup
 
 
 setup(name='M2FS',
-      version='0.5',
+      version='0.6',
       description='M2FS reduction utilities',
       author='Jeb Bailey',
       author_email='baileyji@umich.edu',
