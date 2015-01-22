@@ -20,8 +20,23 @@ def parse_cl():
     parser.add_argument('-o', dest='outdir', default='',
                         action='store', required=False, type=str,
                         help='Out directory')
+    parser.add_argument('--sigclip', dest='sigclip', default=15.0,
+                        action='store', required=False, type=float,
+                        help='CR Sigmaclip (sigma limit for flagging as CR)')
+    parser.add_argument('--sigfrac', dest='sigfrac', default=0.3,
+                        action='store', required=False, type=float,
+                        help='CR Sigmafrac (sigclip fract for neighboring pix)')
+    parser.add_argument('--objlim', dest='objlim', default=1.4,
+                        action='store', required=False, type=float,
+                        help='CR Object Limit (raise if normal data clipped)')
+    parser.add_argument('--criter', dest='criter', default=10,
+                        action='store', required=False, type=int,
+                        help='CR Iteration Limit')
+    parser.add_argument('--overwrite', dest='overwrite', default=False,
+                        action='store_true', required=False,
+                        help='clobber existing output')
     parser.add_argument('-z', dest='gzip', default=False,
-                 action='store', required=False, type=bool,
+                 action='store_true', required=False,
                  help='gzip fits files')
     return parser.parse_args()
 
@@ -68,9 +83,9 @@ if __name__ =='__main__':
             print "Disk space too low"
             continue
         if args.do_cosmic:
-            cosmic_settings={'sigclip': 15.0, 'sigfrac': .3, 'objlim': 1.4,
-                'iter':10}
+            cosmic_settings={'sigclip': args.sigclip, 'sigfrac': args.sigfrac,
+                             'objlim': args.objlim, 'iter':args.criter}
         else:
             cosmic_settings=False
         mergequad(f, do_cosmic=cosmic_settings, file=True, odir=args.outdir,
-                  dogzip=args.gzip)
+                  dogzip=args.gzip, clobber=args.overwrite)

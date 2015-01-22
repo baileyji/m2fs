@@ -363,7 +363,9 @@ def find_focus(files, args):
     xvals=[focus_data[f][0] for f in foc]
     yvals=[focus_data[f][1] for f in foc]
     cvals=[focus_data[f][2] for f in foc]
-    
+
+    temps=np.array([k[3][1] for k in focus_data.values()])
+
     if len(foc) >2:
         cx=np.polyfit(foc, xvals, 2)
         cy=np.polyfit(foc, yvals, 2)
@@ -371,8 +373,8 @@ def find_focus(files, args):
         min_y=-cy[1]/cy[0]/2
         print 'Processed {}'.format(files)
         print('Filter: {}'.format(filt))
-        print('Best x focus @ {:.1f} with value of {:.2f}'.format(min_x,
-              np.poly1d(cx)(min_x)))
+        print('Best x focus @ {:.1f} with value of {:.2f} at temp {:3f}'.format(
+              min_x, np.poly1d(cx)(min_x), temps.mean()))
         print('Best y focus @ {:.1f} with value of {:.2f}'.format(min_y,
               np.poly1d(cy)(min_y)))
         print '{:.1f} {:.1f} {} {} {} {} {}'.format(min_x, min_y,
@@ -380,8 +382,6 @@ def find_focus(files, args):
     for i,f in enumerate(foc):
         print('Focus: {} FWHM: {:.1f}, {:.1f} Covar: {:.1f} Temps:{}'.format(
               foc[i],xvals[i],yvals[i],cvals[i], focus_data[f][3]))
-
-    temps=np.array([k[3][1] for k in focus_data.values()])
 
     if len(foc) >2:
         plt.figure(6)

@@ -3,44 +3,53 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 from astropy.io import fits
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
+from astropy.coordinates import Latitude, Longitude
+from astropy import units as u
 import os.path
+
 
 def _compute_midpoint(head):
     try:
-        return Time(head['UT-MID'], format='iso', scale='utc')
+        time, offset=head['UT-MID'], TimeDelta(0.0,format='sec')
     except KeyError:
-        #import ipdb;ipdb.set_trace()
-        start=Time(head['UT-DATE']+' '+head['UT-TIME'],
-                   format='iso', scale='utc')
-        end=Time(head['UT-DATE']+' '+head['UT-END'],
-                   format='iso', scale='utc')
-
-        return start +.5*(end-start)
+        time=head['UT-DATE']+' '+head['UT-TIME']
+        offset=TimeDelta(head['EXPTIME']/2.0, format='sec')
+    
+    return Time(time, format='iso', scale='utc',
+                lat=Latitude(-29.01423,unit=u.degree),
+                lon=Longitude(-70.69242,unit=u.degree))+offset
 
 class M2FS_Obs_Info(object):
-    def __init__(self,file, no_load=False):
-    
-        self.file=file
-        if 'r' in os.path.basename(file):
-            self.side='r'
-        else:
-            self.side='b'
-        self.seqno=(os.path.basename(file)[1:5])
-    
+    def __init__(self, file, no_load=False):
+        self._file=file
+        self.side='r' if 'r' in os.path.basename(file) else 'b'
         if no_load:
             self.header=None
-            self.midpoint=None
         else:
-            self.load()
+             self.load()
+            
+    @property
+    def file(self):
+        return self._file
+
+    @property
+    def seqno(self):
+        bf=os.path.basename(self.file)
+        no=int(bf[1:].split('_')[0].split(',')[0].split('-')[0].split('.')[0].split('c')[0])
+        return '{:04}'.format(no)
 
     def load(self):
         try:
             self.header=fits.getheader(self.file)
-            self.midpoint=_compute_midpoint(self.header)
         except IOError:
             self.header=None
-            self.midpoint=None
+
+    @property
+    def midpoint(self):
+        if self.header is None: self.load()
+        if self.header is None: return None
+        return _compute_midpoint(self.header)
 
     def seqno_match(self, seq_id):
         if type(seq_id) in [list, tuple]:
@@ -57,8 +66,8 @@ class M2FS_Obs_Info(object):
                 side=''
         try:
             no=int(seq_id)
-        except TypeError:
-                raise
+        except TypeError as e:
+            raise e
 
         return (not side or side==self.side) and no==int(self.seqno)
 

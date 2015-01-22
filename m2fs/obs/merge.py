@@ -10,7 +10,7 @@ import m2fs.obs
 
 from multiprocessing import Pool
 
-def proc_quad(qdata, header, cosmic_settings):
+def _proc_quad(qdata, header, cosmic_settings):
     """cosmic_settings = cosmic_kwargs + 'iter' or just 'iter':0"""
     
     cosmic_iter=cosmic_settings.pop('iter')
@@ -53,7 +53,7 @@ def proc_quad(qdata, header, cosmic_settings):
 
 
 def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
-              repair=False, dogzip=False):
+              repair=False, dogzip=False, clobber=False):
     """Give a seqno or a path to a quad if file set
     do_cosmic=bool or dict like
     sigma for init clip, fraction for neighbors, how much above background*
@@ -84,8 +84,9 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     basename=side+'{frameno:04}'
     f=dir+basename+'c{quad}.'+extension
     
-    if (os.path.exists(odir+basename.format(frameno=frameno)+'.fits') or
-        os.path.exists(odir+basename.format(frameno=frameno)+'.fits.gz')):
+    if ((os.path.exists(odir+basename.format(frameno=frameno)+'.fits') or
+         os.path.exists(odir+basename.format(frameno=frameno)+'.fits.gz'))
+        and not clobber):
         print ("Skipping "+odir+basename.format(frameno=frameno)+".fits. "
                "Already done.")
         return
@@ -104,8 +105,8 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     #Cosmic ray removal configuration
     if type(do_cosmic)==bool:
         if do_cosmic:
-            cosmic_settings={'sigclip': 7.0, 'sigfrac': 0.428, 'objlim': 1.4,
-                    'iter':10}
+            cosmic_settings={'sigclip': 7.0, 'sigfrac': 0.428,
+                             'objlim': 1.4, 'iter':10}
             do_cosmic=cosmic_settings.copy()
         else:
             cosmic_settings={'iter':0}
@@ -140,7 +141,7 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     args=[(q.data.copy(),q.header.copy(), cosmic_settings.copy())
           for q in quadrantData]
     pool = Pool(processes=4)
-    res=[pool.apply_async(proc_quad, arg) for arg in args]
+    res=[pool.apply_async(_proc_quad, arg) for arg in args]
     pool.close()
     pool.join()
 
@@ -176,15 +177,16 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     if repair:
         jbastro.median_patch(out, mask)
 
-    #Flip so it is in agreement with Mario's process
-    out=np.flipud(out)
-    vout=np.flipud(vout)
+    #Flip so it is in agreement with Mario's process and convert to 32bit float
+    out=np.flipud(out).astype(np.float32)
+    vout=np.flipud(vout).astype(np.float32)
     mask=np.flipud(mask)
 
-    #make CRs count as nothing
-    out[mask.astype(bool)]=0
-    vout[mask.astype(bool)]=1e9
-    
+    #make CRs, NaNs, & Infs count as nothing
+    bad=((mask.astype(bool)) | (~np.isfinite(out)) | (~np.isfinite(vout)))
+    out[bad]=0
+    patch_val=min(max(vout[~bad].max()*1.05, 1e9), 1e35)
+    vout[bad]=patch_val
 
     #Write out the merged file
     headerout.pop('TRIMSEC')
@@ -194,16 +196,22 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     headerout['BUNIT']='E-/PIXEL'
     headerout['EGAIN']=1.0
     headerout['ENOISE']=2.5 # average for the 4 amps in slow is 2.5 e
+    headerout['PATCHVAL']=patch_val
+    if cosmic_settings['iter']==0:
+        headerout['LACR']='False'
+    else:
+        headerout['LACR']='True'
+        headerout['LACRIT']=cosmic_settings['iter']
+        headerout['LACRSC']=cosmic_settings['sigclip']
+        headerout['LACRSF']=cosmic_settings['sigfrac']
+        headerout['LACROL']=cosmic_settings['objlim']
 
     hdul = fits.HDUList(fits.PrimaryHDU(header=headerout))
-    hdul.append(fits.ImageHDU(out.astype(np.float32),
-                              name='science', header=headerout))
-    hdul.append(fits.ImageHDU(vout.astype(np.float32),
-                              name='variance', header=headerout))
+    hdul.append(fits.ImageHDU(out, name='science', header=headerout))
+    hdul.append(fits.ImageHDU(vout, name='variance', header=headerout))
     
     gzip='.gz' if dogzip else ''
-    if do_cosmic:
-        hdul.append(fits.ImageHDU(mask, name='mask'))
-    if not os.path.exists(odir+basename.format(frameno=frameno)+'.fits'+gzip):
-        hdul.writeto(odir+basename.format(frameno=frameno)+'.fits'+gzip)
+    if do_cosmic: hdul.append(fits.ImageHDU(mask, name='mask'))
 
+    ofile=odir+basename.format(frameno=frameno)+ '.fits'+gzip
+    if clobber or not os.path.exists(ofile): hdul.writeto(ofile,clobber=clobber)
