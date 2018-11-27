@@ -4,6 +4,7 @@ import argparse
 from jbastro.misc import derangify
 import m2fs.obs
 import os
+from glob import glob
 
 def parse_cl():
     parser = argparse.ArgumentParser(description='Quadrant merger',
@@ -57,10 +58,22 @@ if __name__ =='__main__':
     
     args=parse_cl()
     
+    print 'Looking in {} for files'.format(args.dir)
+    
+    if '*' in args.dir:
+        basedirs = glob(args.dir)
+    else:
+        basedirs = (args.dir,)
+        
     files = [os.path.join(dirpath, f)
-             for dirpath, dirnames, files in os.walk(args.dir)
+             for basedir in basedirs
+             for dirpath, dirnames, files in os.walk(basedir)
              for f in files
-             if 'c1.fits' in f and f not in ['rc1.fits','bc1.fits']] #allow fits.gz
+             if 'c1.fits' in f and f not in ['rc1.fits','bc1.fits']]
+#    files = [os.path.join(dirpath, f)
+#             for dirpath, dirnames, files in os.walk(basedir) if base in dirpath
+#             for f in files
+#             if 'c1.fits' in f and f not in ['rc1.fits','bc1.fits']]
 
     try:
         seqno=get_seqnos(args.listfile)
@@ -75,6 +88,8 @@ if __name__ =='__main__':
     except IOError:
         print 'No listfile, doing all'
 
+    if len(files) == 0:
+        print 'No files found'
 
     for i,f in enumerate(files):
         print "Merging {} of {}".format(i,len(files))
