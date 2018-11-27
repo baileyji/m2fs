@@ -7,7 +7,7 @@ from astropy.time import Time, TimeDelta
 from astropy.coordinates import Latitude, Longitude
 from astropy import units as u
 import os.path
-
+from jbastro.misc import derangify
 
 def _compute_midpoint(head):
     try:
@@ -38,6 +38,11 @@ class M2FS_Obs_Info(object):
         bf=os.path.basename(self.file)
         no=int(bf[1:].split('_')[0].split(',')[0].split('-')[0].split('.')[0].split('c')[0])
         return '{:04}'.format(no)
+    
+    @property
+    def seqnos(self):
+        bf=os.path.basename(self.file)
+        return derangify(bf[1:].split('.')[0].split('c')[0].replace('_',','))
 
     def load(self):
         try:

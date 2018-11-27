@@ -1,10 +1,11 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 import numpy as np
 import sys
 from astropy.io import fits
 import re
 import pylab as pl
 import astropy.stats
+import scipy
 import scipy.ndimage as ndimage
 from jbastro.misc import rangify, derangify
 from jbastro.astroLib import crreject
@@ -128,12 +129,11 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, clobber=False,
                     msk=im[3].data
                     if do_cosmic:
                         foo=crreject(im[2].data)
-                        msk+=foo
-                    msk=ndimage.morphology.binary_dilation(
-                        msk.astype(np.bool), structure=np.ones((3,3)),
-                        iterations=1, mask=None, output=None,
-                        border_value=0, origin=0, brute_force=False)
-                
+                        msk+=ndimage.morphology.binary_dilation(
+                            foo.astype(np.bool), structure=np.ones((3,3)),
+                            iterations=1, mask=None, output=None,
+                            border_value=0, origin=0, brute_force=False)
+
                     mask[:,:,i]=msk
                     
                 #compute midpoint

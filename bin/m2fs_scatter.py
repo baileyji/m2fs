@@ -83,23 +83,25 @@ if __name__ == '__main__':
                     thresh=args.threshold, glow=args.glow, offset=args.offset,
                     glowOnly=args.glowonly, noprompt=args.silent)
     else:
-        if len(sys.argv) >2:
-            ofile=sys.argv[2]
-        else:
-            print ' Output file not specified'
-            raise ValueError
-        s_im, err =mkscatter(fits.getdata(file,1),fits.getdata(file,2),
-                             scatter_thresh=args.threshold,
-                             debug=args.debug,
-                             plot=not args.silent, header=fits.getheader(file),
-                             do_glow=args.glow, offset=args.offset,
-                             glowOnly=args.glowonly)
-
-        if ofile==file:
-            ofile+='.scatter.fits.gz'
-
-        hdu=fits.PrimaryHDU(s_im.astype(np.float32))
-        hdu.writeto(ofile)
+        print 'Must be called with -a'
+        
+#        if len(sys.argv) >2:
+#            ofile=sys.argv[2]
+#        else:
+#            print ' Output file not specified'
+#            raise ValueError
+#        s_im, err =mkscatter(fits.getdata(file,1),fits.getdata(file,2),
+#                             scatter_thresh=args.threshold,
+#                             debug=args.debug,
+#                             plot=not args.silent, header=fits.getheader(file),
+#                             do_glow=args.glow, offset=args.offset,
+#                             glowOnly=args.glowonly)
+#
+#        if ofile==file:
+#            ofile+='.scatter.fits.gz'
+#
+#        hdu=fits.PrimaryHDU(s_im.astype(np.float32))
+#        hdu.writeto(ofile)
 
 
 
