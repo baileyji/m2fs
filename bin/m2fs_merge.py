@@ -30,7 +30,7 @@ def parse_cl():
     parser.add_argument('--objlim', dest='objlim', default=1.4,
                         action='store', required=False, type=float,
                         help='CR Object Limit (raise if normal data clipped)')
-    parser.add_argument('--criter', dest='criter', default=10,
+    parser.add_argument('--criter', dest='criter', default=5,
                         action='store', required=False, type=int,
                         help='CR Iteration Limit')
     parser.add_argument('--overwrite', dest='overwrite', default=False,
