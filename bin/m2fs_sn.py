@@ -93,6 +93,18 @@ def fit_peaks(image, points, wx, xw=25, plot=False, maxfev=5000):
     return ret
 
 def compute_sn(file, args):
+    """ a merged frame
+    args is an object with attrs
+        sep - a minimum allowable seperation
+        min - a minimum peak value to consider
+        xw - a window width around each peak to do use for the model  #unused
+        hwid - half window width to use when smashing the gaussian or data
+        min_sn - a minimun sn value to consider
+        tpdat - wether to print rotator info
+        plot - do some plotting
+        debug - use debugging mode
+        
+    """
     
     #Settings
     min_sep=args.sep
@@ -121,8 +133,9 @@ def compute_sn(file, args):
     rotv=hdu[0].header['ROTANGLE']
     
     ncol=fim.shape[1]
-    c0=ncol/2 - 2*.02*ncol
-    c1=ncol/2 - .02*ncol
+    c0=int(round(ncol/2 - 2*.02*ncol))
+    c1=int(round(ncol/2 - .02*ncol))
+    
     im=fim[:,c0:c1].mean(1)
     vim=vfim[:,c0:c1].mean(1)
 
@@ -148,9 +161,10 @@ def compute_sn(file, args):
     for i,x in enumerate(peaks):
 #        cent=ret[x]['param'][1]
         cent=x
-        sl=slice(cent-smashw,(cent+1)+smashw)
+        sl=slice(int(round(cent-smashw)),int(round(cent+1+smashw)))
         sn=im[sl].sum()/np.sqrt(vim[sl].sum())
-
+        
+        #Need to add some clipping here for major outliers in the variance
         
         if sn > args.min_sn:
             peakdat.append(x)
@@ -169,6 +183,7 @@ def compute_sn(file, args):
     plt.axhline(minv)
     plt.xlim(0,fim.shape[0])
     plt.show(0)
+    for i,sn in enumerate(sns): print i, sn
     print 'Mean/Median/Std S/N: {:.0f}/{:.0f}/{:.0f}'.format(np.mean(sns),
                                                              np.median(sns),
                                                              np.std(sns))
@@ -186,6 +201,7 @@ def compute_sn(file, args):
 #        elif input=='a':
 #           exit(1)
 
+    return zip(peakdat, sns)
 
 
 if __name__ =='__main__':
@@ -201,6 +217,9 @@ if __name__ =='__main__':
 
     args=parse_cl()
     
-    compute_sn(args.file,args)
+    compute_sn(args.file, args)
 
-    raw_input('Any key to exit')
+    print 'Close plot to exit'
+    plt.tight_layout()
+    plt.show(True)
+
