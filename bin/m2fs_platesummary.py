@@ -2,6 +2,7 @@
 import numpy as np
 from hole_mapper import plate
 from hole_mapper import pathconf
+import sys
 
 def floatable(x):
     try:
@@ -40,8 +41,7 @@ def summarize_plates():
         fnamefmt='{:'+'{}'.format(nlen)+'}'
         
         #magnitude keys
-        magkey=list(set(k for f in p.fields for t in f.targets
-                        for k in t.user.keys()
+        magkey=list(set(k for f in p.fields for t in f.targets for k in t.user.keys()
                         if k in ['v','b','r','g','i'] or 'mag' in k))
 
         indent='   '
@@ -52,8 +52,8 @@ def summarize_plates():
 
 
         for f in p.fields:
-        
-            mags=[np.array([float(t.user[k]) for t in f.targets if k in t.user and floatable(t.user[k])]) for k in magkey]
+            mags=[np.array([float(t.user[k]) for t in f.targets
+                            if k in t.user and floatable(t.user[k])]) for k in magkey]
              
             for m in mags:m[(m<5) | (m > 30)]=np.nan
             meanmag=[np.nanmean(m) for m in mags]
@@ -67,14 +67,22 @@ def summarize_plates():
 
     return lines
 
-
+#
+#def iobserve_file()
+#    pnames=plate.get_all_plate_names()
+#    nlen=min(max(map(len,pnames)), 25)
+#    namefmt='{:'+'{}'.format(nlen)+'}'
+#    lines=[]
+#    for pname in pnames:
+#        p=plate.get_plate(pname)
+#        lines.append(fmt.format(p.))
 
 
 if __name__ == '__main__':
     
-    if len(sys.argv) >2 :
+    if len(sys.argv) >1 :
         pathconf.ROOT=sys.argv[1]
-
+#    import ipdb;ipdb.set_trace()
     lines=summarize_plates()
     for line in lines:
         print line
