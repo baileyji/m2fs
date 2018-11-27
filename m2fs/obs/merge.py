@@ -7,7 +7,7 @@ import re
 import os
 from jbastro.lacosmics.cosmics import cosmicsimage
 import m2fs.obs
-
+from scipy import ndimage
 from multiprocessing import Pool
 
 def _proc_quad(qdata, header, cosmic_settings):
@@ -41,7 +41,11 @@ def _proc_quad(qdata, header, cosmic_settings):
                       satlevel=.95*m2fs.ccd.satlevel,
                       **cosmic_settings)
         c.run(maxiter = cosmic_iter)
-        qmask=c.mask
+        qmask=ndimage.morphology.binary_dilation(
+                        c.mask.astype(np.bool), structure=np.ones((3,3)),
+                        iterations=1, mask=None, output=None,
+                        border_value=0, origin=0, brute_force=False)
+#        qmask=c.mask
     else:
         qmask=np.zeros_like(qdata, dtype=np.bool)
 
