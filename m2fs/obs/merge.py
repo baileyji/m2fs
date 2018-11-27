@@ -22,8 +22,10 @@ def _proc_quad(qdata, header, cosmic_settings):
     trimsec=header['TRIMSEC']
     crop=[int(s) for s in re.findall(r'\d+',trimsec)]
 
+    qdata=qdata.astype(float)
     #Compute & subtract median for overscan region rowwise
-    biaslevels=np.median(qdata[crop[2]-1:,bias[0]-1:bias[1]], axis=1)
+    biaslevels=np.median(qdata[crop[2]-1:,bias[0]-1:bias[1]].astype(float),
+                         axis=1)
     qdata-=biaslevels[:,np.newaxis]
 
     #Compute & subtract median bias row
