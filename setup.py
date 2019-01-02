@@ -18,5 +18,5 @@ setup(name='M2FS',
                'bin/m2fs_focus.py',
                'bin/m2fs_rotation.py',
                'bin/m2fs_sn.py'],
-      install_requires=['numpy>=1.8.0']
+      install_requires=['numpy>=1.8.0', 'ipdb']
       )
