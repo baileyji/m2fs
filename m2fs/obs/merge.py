@@ -1,65 +1,69 @@
 #!/usr/bin/env python2.7
 import numpy as np
 from astropy.io import fits
-import astropy.stats
 import m2fs.ccd
 import re
 import os
+import jbastro
+import jbastro.astroLib as astroLib
 from jbastro.lacosmics.cosmics import cosmicsimage
-import m2fs.obs
 from scipy import ndimage
+import m2fs.obs
 from multiprocessing import Pool
+
 
 def _proc_quad(qdata, header, cosmic_settings):
     """cosmic_settings = cosmic_kwargs + 'iter' or just 'iter':0"""
-    
-    cosmic_iter=cosmic_settings.pop('iter')
-    
-    
-    biassec=header['BIASSEC']
-    bias=[int(s) for s in re.findall(r'\d+',biassec)]
-    
-    trimsec=header['TRIMSEC']
-    crop=[int(s) for s in re.findall(r'\d+',trimsec)]
 
-    qdata=qdata.astype(float)
-    #Compute & subtract median for overscan region rowwise
-    biaslevels=np.median(qdata[crop[2]-1:,bias[0]-1:bias[1]].astype(float),
-                         axis=1)
-    qdata-=biaslevels[:,np.newaxis]
+    cosmic_iter = cosmic_settings.pop('iter')
 
-    #Compute & subtract median bias row
-    qdata-=np.median(qdata[bias[2]:,:], axis=0)
-    
-    #Crop the image
-    qdata=qdata[crop[2]-1:crop[3],crop[0]-1:crop[1]]
-    
-    #Cosmic ray rejection
-    if cosmic_iter>0:
-        c=cosmicsimage(qdata, gain=header['EGAIN'],
-                      readnoise=header['ENOISE'],
-                      satlevel=.95*m2fs.ccd.satlevel,
-                      **cosmic_settings)
-        c.run(maxiter = cosmic_iter)
-        qmask=ndimage.morphology.binary_dilation(
-                        c.mask.astype(np.bool), structure=np.ones((3,3)),
-                        iterations=1, mask=None, output=None,
-                        border_value=0, origin=0, brute_force=False)
-#        qmask=c.mask
+    biassec = header['BIASSEC']
+    bias = [int(s) for s in re.findall(r'\d+', biassec)]
+
+    trimsec = header['TRIMSEC']
+    crop = [int(s) for s in re.findall(r'\d+', trimsec)]
+
+    qdata = qdata.astype(float)
+    # Compute & subtract median for overscan region rowwise
+    biaslevels = np.median(qdata[crop[2] - 1:, bias[0] - 1:bias[1]].astype(float),
+                           axis=1)
+    qdata -= biaslevels[:, np.newaxis]
+
+    # Compute & subtract median bias row
+    qdata -= np.median(qdata[bias[2]:, :], axis=0)
+
+    # Crop the image
+    qdata = qdata[crop[2] - 1:crop[3], crop[0] - 1:crop[1]]
+
+    # Cosmic ray rejection
+    if cosmic_iter > 0:
+        qmask = astroLib.crreject(qdata, dialate=True, gain=header['EGAIN'], readnoise=header['ENOISE'],
+                                  satlevel=.95 * m2fs.ccd.satlevel, **cosmic_settings)
+
+        # c = cosmicsimage(qdata, gain=header['EGAIN'],
+        #                  readnoise=header['ENOISE'],
+        #                  satlevel=.95 * m2fs.ccd.satlevel,
+        #                  **cosmic_settings)
+        # c.run(maxiter=cosmic_iter)
+        # qmask = ndimage.morphology.binary_dilation(
+        #     c.mask.astype(np.bool), structure=np.ones((3, 3)),
+        #     iterations=1, mask=None, output=None,
+        #     border_value=0, origin=0, brute_force=False)
+
     else:
-        qmask=np.zeros_like(qdata, dtype=np.bool)
+        qmask = np.zeros_like(qdata, dtype=np.bool)
 
-    #Convert to e-
-    qdata*=header['EGAIN']
+    # Convert to e-
+    qdata *= header['EGAIN']
 
-    #Variance image
-    qvari=qdata + header['ENOISE']**2
-    
+    # Variance image
+    qvari = qdata + header['ENOISE'] ** 2
+
     return (qdata, qvari, qmask)
 
 
 def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
-              repair=False, dogzip=False, clobber=False):
+              repair=False, dogzip=False, overwrite=False):
     """Give a seqno or a path to a quad if file set
     do_cosmic=bool or dict like
     sigma for init clip, fraction for neighbors, how much above background*
@@ -67,157 +71,146 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='',
     """
     if side == None and not file:
         try:
-            mergequad(frameno,side='r', do_cosmic=do_cosmic)
+            mergequad(frameno, side='r', do_cosmic=do_cosmic)
         except IOError:
-            print 'Need all quadrants for r{}'.format(frameno)
+            print('Need all quadrants for r{}'.format(frameno))
         try:
-            mergequad(frameno,side='b',do_cosmic=do_cosmic)
+            mergequad(frameno, side='b', do_cosmic=do_cosmic)
         except IOError:
-            print 'Need all quadrants for b{}'.format(frameno)
+            print('Need all quadrants for b{}'.format(frameno))
         return
-    
-    if file:
-        fname=frameno
-        frameno=int(m2fs.obs.info(fname, no_load=True).seqno)
-        basename=os.path.basename(fname)
-        side=basename[0]
-        dir=os.path.dirname(fname)+os.path.sep
-        _,_,extension=basename.partition('.')
-    else:
-        dir=''
-        extension='fits'
-    
-    basename=side+'{frameno:04}'
-    f=dir+basename+'c{quad}.'+extension
-    
-    if ((os.path.exists(odir+basename.format(frameno=frameno)+'.fits') or
-         os.path.exists(odir+basename.format(frameno=frameno)+'.fits.gz'))
-        and not clobber):
-        print ("Skipping "+odir+basename.format(frameno=frameno)+".fits. "
-               "Already done.")
-        return
-    else:
-        print "Merging "+odir+basename.format(frameno=frameno)+'.fits'
 
-    #Load the data
+    if file:
+        fname = frameno
+        frameno = int(m2fs.obs.info(fname, no_load=True).seqno)
+        basename = os.path.basename(fname)
+        side = basename[0]
+        dir = os.path.dirname(fname) + os.path.sep
+        _, _, extension = basename.partition('.')
+    else:
+        dir = ''
+        extension = 'fits'
+
+    basename = side + '{frameno:04}'
+    f = dir + basename + 'c{quad}.' + extension
+
+    if ((os.path.exists(odir + basename.format(frameno=frameno) + '.fits') or
+         os.path.exists(odir + basename.format(frameno=frameno) + '.fits.gz'))
+            and not overwrite):
+        print("Skipping " + odir + basename.format(frameno=frameno) + ".fits. "
+                                                                      "Already done.")
+        return
+    else:
+        print("Merging " + odir + basename.format(frameno=frameno) + '.fits')
+
+    # Load the data
     try:
-        quadrant1=fits.open(f.format(frameno=frameno, quad=1))
-        quadrant2=fits.open(f.format(frameno=frameno, quad=2))
-        quadrant3=fits.open(f.format(frameno=frameno, quad=3))
-        quadrant4=fits.open(f.format(frameno=frameno, quad=4))
-    except IOError, e:
+        quadrant1 = fits.open(f.format(frameno=frameno, quad=1))
+        quadrant2 = fits.open(f.format(frameno=frameno, quad=2))
+        quadrant3 = fits.open(f.format(frameno=frameno, quad=3))
+        quadrant4 = fits.open(f.format(frameno=frameno, quad=4))
+    except IOError as e:
         raise e
 
-    #Cosmic ray removal configuration
-    if type(do_cosmic)==bool:
+    # Cosmic ray removal configuration
+    if isinstance(do_cosmic, bool):
         if do_cosmic:
-            cosmic_settings={'sigclip': 7.0, 'sigfrac': 0.428,
-                             'objlim': 1.4, 'iter':10}
-            do_cosmic=cosmic_settings.copy()
+            cosmic_settings = {'sigclip': 7.0, 'sigfrac': 0.428,
+                               'objlim': 1.4, 'iter': 10}
+            do_cosmic = cosmic_settings.copy()
         else:
-            cosmic_settings={'iter':0}
+            cosmic_settings = {'iter': 0}
     else:
-        cosmic_settings=do_cosmic.copy()
-    
+        cosmic_settings = do_cosmic.copy()
 
-    #Grab the bias and crop region from the first quadrant
-    biassec=quadrant1[0].header['BIASSEC']
-    bias=[int(s) for s in re.findall(r'\d+',biassec)]
-    
-    trimsec=quadrant1[0].header['TRIMSEC']
-    crop=[int(s) for s in re.findall(r'\d+',trimsec)]
-    
-    #Create output arrays
-    out=np.zeros((crop[3]*2,crop[1]*2),dtype=np.float32)
-    vout=np.zeros((crop[3]*2,crop[1]*2),dtype=np.float32)
-    mask=np.zeros((crop[3]*2,crop[1]*2),dtype=np.uint8)
-    headerout=quadrant1[0].header.copy()
-    
-    #Define where the quadrants show go
-    quadLoc=[(0, crop[3], 0, crop[1]),
-             (0,crop[3], crop[1], 2*crop[1]),
-             ( crop[3], 2*crop[3], crop[1], 2*crop[1]),
-             (crop[3],2*crop[3],0, crop[1])]
-             
-    #Create a list of the quadrant's data to loop through
-    quadrantData=[quadrant1[0], quadrant2[0], quadrant3[0], quadrant4[0]]
+    # Grab the bias and crop region from the first quadrant
+    biassec = quadrant1[0].header['BIASSEC']
+    bias = [int(s) for s in re.findall(r'\d+', biassec)]
 
+    trimsec = quadrant1[0].header['TRIMSEC']
+    crop = [int(s) for s in re.findall(r'\d+', trimsec)]
 
-    #Process them in multiple processes
-    args=[(q.data.copy(),q.header.copy(), cosmic_settings.copy())
-          for q in quadrantData]
+    # Create output arrays
+    out = np.zeros((crop[3] * 2, crop[1] * 2), dtype=np.float32)
+    vout = np.zeros((crop[3] * 2, crop[1] * 2), dtype=np.float32)
+    mask = np.zeros((crop[3] * 2, crop[1] * 2), dtype=np.uint8)
+    headerout = quadrant1[0].header.copy()
+
+    # Define where the quadrants show go
+    quadLoc = [(0, crop[3], 0, crop[1]),
+               (0, crop[3], crop[1], 2 * crop[1]),
+               (crop[3], 2 * crop[3], crop[1], 2 * crop[1]),
+               (crop[3], 2 * crop[3], 0, crop[1])]
+
+    # Create a list of the quadrant's data to loop through
+    quadrantData = [quadrant1[0], quadrant2[0], quadrant3[0], quadrant4[0]]
+
+    # Process them in multiple processes
+    args = [(q.data.copy(), q.header.copy(), cosmic_settings.copy())
+            for q in quadrantData]
     pool = Pool(processes=4)
-    res=[pool.apply_async(_proc_quad, arg) for arg in args]
+    res = [pool.apply_async(_proc_quad, arg) for arg in args]
     pool.close()
     pool.join()
 
-    for i,r in enumerate(res):
+    for i, r in enumerate(res):
         qdata, qvar, qmask = r.get()
-        #Position the quadrants
-        if i ==0:
-            out[quadLoc[i][0]:quadLoc[i][1],quadLoc[i][2]:quadLoc[i][3]]=qdata
-            vout[quadLoc[i][0]:quadLoc[i][1],quadLoc[i][2]:quadLoc[i][3]]=qvar
-            mask[quadLoc[i][0]:quadLoc[i][1],quadLoc[i][2]:quadLoc[i][3]]=qmask
-        if i==1:
-            out[quadLoc[i][0]:quadLoc[i][1],
-                quadLoc[i][2]:quadLoc[i][3]]=np.fliplr(qdata)
-            vout[quadLoc[i][0]:quadLoc[i][1],
-                 quadLoc[i][2]:quadLoc[i][3]]=np.fliplr(qvar)
-            mask[quadLoc[i][0]:quadLoc[i][1],
-                 quadLoc[i][2]:quadLoc[i][3]]=np.fliplr(qmask)
-        if i==2:
-            out[quadLoc[i][0]:quadLoc[i][1],
-                quadLoc[i][2]:quadLoc[i][3]]=np.rot90(qdata,2)
-            vout[quadLoc[i][0]:quadLoc[i][1],
-                 quadLoc[i][2]:quadLoc[i][3]]=np.rot90(qvar,2)
-            mask[quadLoc[i][0]:quadLoc[i][1],
-                 quadLoc[i][2]:quadLoc[i][3]]=np.rot90(qmask,2)
-        if i==3:
-            out[quadLoc[i][0]:quadLoc[i][1],
-                quadLoc[i][2]:quadLoc[i][3]]=np.rot90(np.fliplr(qdata),2)
-            vout[quadLoc[i][0]:quadLoc[i][1],
-                 quadLoc[i][2]:quadLoc[i][3]]=np.rot90(np.fliplr(qvar),2)
-            mask[quadLoc[i][0]:quadLoc[i][1],
-                 quadLoc[i][2]:quadLoc[i][3]]=np.rot90(np.fliplr(qmask),2)
+        # Position the quadrants
+        if i == 0:
+            out[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = qdata
+            vout[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = qvar
+            mask[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = qmask
+        if i == 1:
+            out[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.fliplr(qdata)
+            vout[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.fliplr(qvar)
+            mask[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.fliplr(qmask)
+        if i == 2:
+            out[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.rot90(qdata, 2)
+            vout[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.rot90(qvar, 2)
+            mask[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.rot90(qmask, 2)
+        if i == 3:
+            out[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.rot90(np.fliplr(qdata), 2)
+            vout[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.rot90(np.fliplr(qvar), 2)
+            mask[quadLoc[i][0]:quadLoc[i][1], quadLoc[i][2]:quadLoc[i][3]] = np.rot90(np.fliplr(qmask), 2)
 
     if repair:
         jbastro.median_patch(out, mask)
 
-    #Flip so it is in agreement with Mario's process and convert to 32bit float
-    out=np.flipud(out).astype(np.float32)
-    vout=np.flipud(vout).astype(np.float32)
-    mask=np.flipud(mask)
+    # Flip so it is in agreement with Mario's process and convert to 32bit float
+    out = np.flipud(out).astype(np.float32)
+    vout = np.flipud(vout).astype(np.float32)
+    mask = np.flipud(mask)
 
-    #make CRs, NaNs, & Infs count as nothing
-    bad=((mask.astype(bool)) | (~np.isfinite(out)) | (~np.isfinite(vout)))
-    out[bad]=0
-    patch_val=min(max(vout[~bad].max()*1.05, 1e9), 1e35)
-    vout[bad]=patch_val
+    # make CRs, NaNs, & Infs count as nothing
+    bad = ((mask.astype(bool)) | (~np.isfinite(out)) | (~np.isfinite(vout)))
+    out[bad] = 0
+    patch_val = min(max(vout[~bad].max() * 1.05, 1e9), 1e35)
+    vout[bad] = patch_val
 
-    #Write out the merged file
+    # Write out the merged file
     headerout.pop('TRIMSEC')
     headerout.pop('BIASSEC')
     headerout.pop('DATASEC')
-    headerout['FILENAME']=basename.format(frameno=frameno)
-    headerout['BUNIT']='E-/PIXEL'
-    headerout['EGAIN']=1.0
-    headerout['ENOISE']=2.5 # average for the 4 amps in slow is 2.5 e
-    headerout['PATCHVAL']=patch_val
-    if cosmic_settings['iter']==0:
-        headerout['LACR']='False'
+    headerout['FILENAME'] = basename.format(frameno=frameno)
+    headerout['BUNIT'] = 'E-/PIXEL'
+    headerout['EGAIN'] = 1.0
+    headerout['ENOISE'] = 2.5  # average for the 4 amps in slow is 2.5 e
+    headerout['PATCHVAL'] = patch_val
+    if cosmic_settings['iter'] == 0:
+        headerout['LACR'] = 'False'
     else:
-        headerout['LACR']='True'
-        headerout['LACRIT']=cosmic_settings['iter']
-        headerout['LACRSC']=cosmic_settings['sigclip']
-        headerout['LACRSF']=cosmic_settings['sigfrac']
-        headerout['LACROL']=cosmic_settings['objlim']
+        headerout['LACR'] = 'True'
+        headerout['LACRIT'] = cosmic_settings['iter']
+        headerout['LACRSC'] = cosmic_settings['sigclip']
+        headerout['LACRSF'] = cosmic_settings['sigfrac']
+        headerout['LACROL'] = cosmic_settings['objlim']
 
     hdul = fits.HDUList(fits.PrimaryHDU(header=headerout))
     hdul.append(fits.ImageHDU(out, name='science', header=headerout))
     hdul.append(fits.ImageHDU(vout, name='variance', header=headerout))
-    
-    gzip='.gz' if dogzip else ''
+
+    gzip = '.gz' if dogzip else ''
     if do_cosmic: hdul.append(fits.ImageHDU(mask, name='mask'))
 
-    ofile=odir+basename.format(frameno=frameno)+ '.fits'+gzip
-    if clobber or not os.path.exists(ofile): hdul.writeto(ofile,clobber=clobber)
+    ofile = odir + basename.format(frameno=frameno) + '.fits' + gzip
+    if overwrite or not os.path.exists(ofile): hdul.writeto(ofile, overwrite=overwrite)

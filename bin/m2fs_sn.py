@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
@@ -147,7 +147,7 @@ def compute_sn(file, args):
 
 
     #Plot image and detected peaks
-    plt.clf()
+    plt.figure(figsize=(18,9))
     plt.plot(im)
     for x in peaks: plt.plot(x,im[x],'w*')
 
@@ -220,6 +220,8 @@ if __name__ =='__main__':
     compute_sn(args.file, args)
 
     print 'Close plot to exit'
+    plt.show()
+    
     plt.tight_layout()
-    plt.show(True)
+    plt.show(False)
 

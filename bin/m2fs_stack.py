@@ -36,7 +36,7 @@ def parse_cl():
     parser.add_argument('-s', dest='single', default='',
                  action='store', required=False, type=str,
                  help='Single file to update')
-    parser.add_argument('--overwrite', dest='clobber', default=False,
+    parser.add_argument('--overwrite', dest='overwrite', default=False,
                  action='store_true', required=False,
                  help='Overwite existing files')
     parser.add_argument('-t', dest='dry_run', default=False,
@@ -80,7 +80,7 @@ def mask_problem_spots(var, header, mask_val=1e35):
         var[328,:2048]=mask_val
         var[1600:2056,2518]=mask_val
 
-def stackimage(files, outfile,  gzip=False, do_cosmic=False, clobber=False,
+def stackimage(files, outfile,  gzip=False, do_cosmic=False, overwrite=False,
                **crparams):
     """
     List of files to stack, output file sans extension.
@@ -252,17 +252,17 @@ def stackimage(files, outfile,  gzip=False, do_cosmic=False, clobber=False,
                               name='crmask'))
     hdul.append(fits.ImageHDU(np.zeros_like(im,dtype=np.uint8),
                               name='bpmask'))
-    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''), clobber=clobber)
+    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''), overwrite=overwrite)
 
 
 
-def update_single(file, outfile,  gzip=False, do_cosmic=False, clobber=False,
+def update_single(file, outfile,  gzip=False, do_cosmic=False, overwrite=False,
                   **extra):
     hdul=fits.open(file)
     mv=compute_patch_val(hdul['VARIANCE'].data)
     mask_problem_spots(hdul['VARIANCE'].data,
                        hdul['SCIENCE'].header, mask_val=mv)
-    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''), clobber=clobber)
+    hdul.writeto(outfile+'.fits'+('.gz' if gzip else ''), overwrite=overwrite)
 
 if __name__ =='__main__':
     
@@ -272,7 +272,7 @@ if __name__ =='__main__':
         outf=os.path.join(args.outdir,
                           os.path.basename(args.single).replace('.fits',''))
         update_single(args.single, outf,
-                           gzip=args.gzip, clobber=args.clobber)
+                           gzip=args.gzip, overwrite=args.overwrite)
         sys.exit()
     
     
@@ -280,7 +280,7 @@ if __name__ =='__main__':
             for dirpath, dirnames, files in os.walk(args.dir)
             for f in files
             if '.fits' in f and '-' not in f and
-                ',' not in f and 'c' not in f]
+                ',' not in f and 'c' not in f and not f.startswith('.')]
     try:
         seqno_stacks=get_seqlists(args.listfile)
 
@@ -307,7 +307,7 @@ if __name__ =='__main__':
                                 rangify(seqnos,delim='_')+'.fits') or
                  os.path.exists(args.outdir+color+
                                 rangify(seqnos,delim='_')+'.fits.gz')) and not
-                args.clobber):
+                args.overwrite):
                 continue
             
             print '   Stacking ',color+rangify(seqnos)
@@ -315,7 +315,7 @@ if __name__ =='__main__':
                 stackimage(filestack, args.outdir+color+
                            rangify(seqnos,delim='_'),
                            gzip=args.gzip, do_cosmic=args.do_cosmic,
-                           clobber=args.clobber)
+                           overwrite=args.overwrite)
 
         except IOError as e:
             print "Couldn't stack {}".format(str(e))

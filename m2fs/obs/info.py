@@ -9,6 +9,7 @@ from astropy import units as u
 import os.path
 from jbastro.misc import derangify
 
+
 def _compute_midpoint(head):
     try:
         time, offset=head['UT-MID'], TimeDelta(0.0,format='sec')
@@ -19,6 +20,7 @@ def _compute_midpoint(head):
     return Time(time, format='iso', scale='utc',
                 lat=Latitude(-29.01423,unit=u.degree),
                 lon=Longitude(-70.69242,unit=u.degree))+offset
+
 
 class M2FS_Obs_Info(object):
     def __init__(self, file, no_load=False):
@@ -36,7 +38,11 @@ class M2FS_Obs_Info(object):
     @property
     def seqno(self):
         bf=os.path.basename(self.file)
-        no=int(bf[1:].split('_')[0].split(',')[0].split('-')[0].split('.')[0].split('c')[0])
+        try:
+            no=int(bf[1:].split('_')[0].split(',')[0].split('-')[0].split('.')[0].split('c')[0])
+        except Exception as e:
+            print 'Fault on '+self.file
+            raise e
         return '{:04}'.format(no)
     
     @property
