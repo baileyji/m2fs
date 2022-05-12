@@ -92,7 +92,10 @@ def gaussfit2D(im, initialp, ftol=1e-5, maxfev=5000, maxv=np.inf,
 def find_peaks(im, min_sep=10, minv=25, maxv=5000):
     """find points to use for psf measurements"""
     points = peak_local_max(im, min_distance=min_sep, threshold_abs=minv, threshold_rel=0)
-    return points[im[points[:, 0], points[:, 1]] < maxv]
+    if points.squeeze().ndim>1:
+        return points[im[points[:, 0], points[:, 1]] < maxv]
+    else:
+        return points[im[points] < maxv]
 
 
 def plot_stamp(im, xy, wid, **imargs):
