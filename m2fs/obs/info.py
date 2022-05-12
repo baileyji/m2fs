@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
@@ -16,10 +17,13 @@ def _compute_midpoint(head):
     except KeyError:
         time=head['UT-DATE']+' '+head['UT-TIME']
         offset=TimeDelta(head['EXPTIME']/2.0, format='sec')
-    
-    return Time(time, format='iso', scale='utc',
-                lat=Latitude(-29.01423,unit=u.degree),
-                lon=Longitude(-70.69242,unit=u.degree))+offset
+
+    try:
+        return Time(time, format='iso', scale='utc', lat=Latitude(-29.01423,unit=u.degree),
+                    lon=Longitude(-70.69242,unit=u.degree))+offset
+    except:
+        return Time(time, format='iso', scale='utc', location=(Longitude(-70.69242,unit=u.degree),
+                                                               Latitude(-29.01423,unit=u.degree)))+offset
 
 
 class M2FS_Obs_Info(object):
@@ -30,7 +34,7 @@ class M2FS_Obs_Info(object):
             self.header=None
         else:
              self.load()
-            
+
     @property
     def file(self):
         return self._file
@@ -41,10 +45,10 @@ class M2FS_Obs_Info(object):
         try:
             no=int(bf[1:].split('_')[0].split(',')[0].split('-')[0].split('.')[0].split('c')[0])
         except Exception as e:
-            print 'Fault on '+self.file
+            print('Fault on ' + self.file)
             raise e
         return '{:04}'.format(no)
-    
+
     @property
     def seqnos(self):
         bf=os.path.basename(self.file)
@@ -58,15 +62,17 @@ class M2FS_Obs_Info(object):
 
     @property
     def midpoint(self):
-        if self.header is None: self.load()
-        if self.header is None: return None
+        if self.header is None:
+            self.load()
+        if self.header is None:
+            return None
         return _compute_midpoint(self.header)
 
     def seqno_match(self, seq_id):
         if type(seq_id) in [list, tuple]:
-            ret=np.array(map(self.seqno_match, seq_id))
+            ret=np.array(list(map(self.seqno_match, seq_id)))
             return ret.any()
-        
+
         if type(seq_id)==str:
             if not seq_id:
                 return False
@@ -90,6 +96,3 @@ class M2FS_Obs_Info(object):
 
 def info(file, no_load=False):
     return M2FS_Obs_Info(file, no_load=no_load)
-
-
-    
