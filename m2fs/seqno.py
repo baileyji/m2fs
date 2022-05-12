@@ -1,4 +1,13 @@
 from jbastro.misc import derangify
+from datetime import datetime
+
+
+def parse_date_comment(s):
+    try:
+        return datetime.strptime(s.strip(), '#%Y%m%d')
+    except ValueError:
+        return None
+
 
 def get_seqnos(listfile):
     ret = set()
@@ -6,10 +15,10 @@ def get_seqnos(listfile):
         for l in lf:
             if l[0] in '1234567890':
                 range = l.split()[0]
-                ret.update(map(str, derangify(range)))
+                ret.update([tuple(map(str, derangify(range)))])
             elif len(l) > 1 and l[0] in 'RBrb' and l[1] in '1234567890':
                 range = l[1:].split()[0]
-                ret.update(map(lambda x: l[0].lower() + str(x), derangify(range)))
+                ret.update([tuple(map(lambda x: l[0].lower() + str(x), derangify(range)))])
     return list(ret)
 
 

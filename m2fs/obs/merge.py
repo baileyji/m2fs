@@ -6,8 +6,6 @@ import re
 import os
 import jbastro
 import jbastro.astroLib as astroLib
-from jbastro.lacosmics.cosmics import cosmicsimage
-from scipy import ndimage
 import m2fs.obs
 from multiprocessing import Pool
 
