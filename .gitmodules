@@ -1,0 +1,3 @@
+[submodule "ifum_apmap"]
+	path = ifum_apmap
+	url = https://baileyji@github.com/baileyji/ifum_apmap.git
