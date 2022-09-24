@@ -2,10 +2,10 @@
 from datetime import datetime
 from multiprocessing.pool import ThreadPool
 import multiprocessing as mp
-import requests
 import argparse
 import os, sys, shutil
 from glob import glob
+from m2fs.obs.fetcher import compute_download_paths, fetch_url
 
 from logging import getLogger
 import logging
@@ -55,81 +55,6 @@ def parse_cl():
                         help='gzip fits files')
     return parser.parse_args()
 
-
-
-def compute_download_paths(seqnum_info, outbase='./', url='https://m2fs.astro.lsa.umich.edu/data'):
-    """ files is list of ('utYYYMMDD', {rb}####) """
-    # Dates extend before and after runs by a good bit
-    pathmap = {'Aug2013': (datetime(2013, 8, 1), datetime(2013, 8, 31)),
-               'Nov2013': (datetime(2013, 11, 1), datetime(2013, 12, 2)),
-               'Feb2014': (datetime(2014, 2, 1), datetime(2014, 3, 1)),
-               'Jun2014': (datetime(2014, 6, 1), datetime(2014, 6, 30)),
-               'Sep2014': (datetime(2014, 9, 1), datetime(2014, 9, 30)),
-               'Dec2014': (datetime(2014, 12, 1), datetime(2014, 12, 31)),
-               'Feb2015': (datetime(2015, 2, 1), datetime(2015, 3, 10)),
-               'Apr2015': (datetime(2015, 4, 1), datetime(2015, 4, 28)),
-               'Jul2015': (datetime(2015, 7, 1), datetime(2015, 7, 30)),
-               'Sep2015': (datetime(2015, 9, 1), datetime(2015, 9, 30)),
-               'Nov2015': (datetime(2015, 11, 1), datetime(2015, 11, 30)),
-               'Feb2016': (datetime(2016, 2, 1), datetime(2016, 2, 28)),
-               'Jun2016': (datetime(2016, 6, 1), datetime(2016, 7, 2)),
-               'AugSep2016': (datetime(2016, 8, 1), datetime(2016, 9, 15)),
-               'NovDec2016': (datetime(2016, 11, 1), datetime(2016, 12, 15)),
-               'FebMar2017': (datetime(2017, 2, 1), datetime(2017, 3, 10)),
-               'MayJun2017': (datetime(2017, 5, 1), datetime(2017, 6, 10)),
-               'Jul2017': (datetime(2017, 7, 1), datetime(2017, 7, 31)),
-               'Sep2017': (datetime(2017, 9, 1), datetime(2017, 9, 30)),
-               'Nov2017': (datetime(2017, 11, 1), datetime(2017, 11, 30)),
-               'Feb2018': (datetime(2018, 2, 1), datetime(2018, 2, 28)),
-               'May2018': (datetime(2018, 5, 1), datetime(2018, 5, 31)),
-               'Aug2018': (datetime(2018, 8, 1), datetime(2018, 8, 31)),
-               'NovDec2018': (datetime(2018, 11, 1), datetime(2018, 12, 10)),
-               'FebMar2019': (datetime(2019, 2, 1), datetime(2019, 3, 10)),
-               'MayJun2019': (datetime(2019, 5, 1), datetime(2019, 6, 10)),
-               'AugSep2019': (datetime(2019, 8, 1), datetime(2019, 9, 10))}
-
-    to_fetch = []
-    for seq in seqnum_info:
-        ut, seqstr, _ = seq
-        run = ''
-        for k, v in pathmap.items():
-            if v[0] < datetime.strptime(ut, 'ut%Y%m%d') < v[1]:
-                run = k
-                break
-        if not run:
-            getLogger(__name__).warning("Unable to determine download location for {} with ut '{}'".format(seqstr, ut))
-            continue
-        to_fetch.extend([('{}/{}/{}/{}c{}.fits'.format(url, run, ut if run != 'AugSep2016' else 'ALL', seqstr, i),
-                          os.path.join(outbase, run, ut, '{}c{}.fits'.format(seqstr, i)))
-                         for i in range(1, 5)])
-
-    return to_fetch
-
-
-def fetch_url(entry):
-    uri, path = entry
-
-    r = requests.get(uri, stream=True, auth=('m2fs', 'm2fsdata'))
-    if r.status_code != 200:
-        getLogger(__name__).error('m2fs.astro.lsa.umich.edu returned {} for {}, skipping'.format(r.status_code, uri))
-        return
-
-    total_size = int(r.headers.get('content-length', 0))  # Total size in bytes.
-    if os.path.exists(path):
-        if os.stat(path).st_size == total_size:
-            # getLogger(__name__).info('{} exists with same size, skipping'.format(path))
-            return
-        else:
-            getLogger(__name__).info('{} exists with mismatched size, downloading'.format(path))
-
-    getLogger(__name__).debug('Fetching {} to {}'.format(uri, path))
-
-    directory = os.path.dirname(path)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    with open(path, 'wb') as f:
-        for data in r.iter_content(1024):
-            f.write(data)
 
 
 if __name__ == '__main__':

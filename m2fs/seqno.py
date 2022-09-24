@@ -23,6 +23,7 @@ def get_seqnos(listfile):
 
 
 def get_seqnos_advanced(listfile):
+    """ List of tuples (datestr, fits basename, docr) """
     ret = set()
     datestr = ''
     crmap = {}

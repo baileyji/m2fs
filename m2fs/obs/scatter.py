@@ -30,21 +30,21 @@ def make_glow_model(im_in, bin_x=1, bin_y=1):
     def model_corner(im, x0, y0, xw, yw, iparams, std_clip=0):
         """ std_clip is the y height of the small corner to use to exclude
         spectra in the large corner,
-        
+
         (iparams=(glow amp, x center, y center, xwid, ywid, xy amount)
-        
+
         positions and initial params adjusted automatically for binning
         pass coordinates in 4k positions
         """
-        x0 /= bin_x
-        y0 /= bin_y
-        xw /= bin_x
-        yw /= bin_y
+        x0 //= bin_x
+        y0 //= bin_y
+        xw //= bin_x
+        yw //= bin_y
         iparams = list(iparams)
-        iparams[1] /= bin_x
-        iparams[2] /= bin_y
-        iparams[3] /= bin_x
-        iparams[4] /= bin_y
+        iparams[1] //= bin_x
+        iparams[2] //= bin_y
+        iparams[3] //= bin_x
+        iparams[4] //= bin_y
 
         corner = im[y0:y0 + yw, x0:x0 + xw].copy()
         if std_clip:
@@ -133,7 +133,7 @@ def mkscatter(im_in, var_im, plot=False, scatter_thresh=.7, debug=False, header=
     scatter_regions = [(0, 50), (480, 575), (1010, 1100), (1525, 1600), (2035, 2120),
                        (2540, 2620), (3030, 3110), (3525, 3600), (3995, 4109)]
 
-    scatter_regions = np.array(scatter_regions) / bin_y
+    scatter_regions = np.array(scatter_regions) // bin_y
 
     scatter_regions[0, 1] += offset
     scatter_regions[-1, 0] += offset

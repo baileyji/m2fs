@@ -1,21 +1,18 @@
 #!/usr/bin/env python
 from Tkinter import *
-import numpy as np
-R_FOCUS_PARAM=[-2.1543, 269.65]
-B_FOCUS_PARAM=[1.7494, 171.5]
-
+from m2fs.focus import RFOCUS, BFOCUS
 
 def rfocus(temp):
     try:
         temp=float(temp)
-        return '%.1f'%np.poly1d(R_FOCUS_PARAM)(temp)
+        return '%.1f'%RFOCUS(temp)
     except Exception:
         return 'Enter Temp'
 
 def bfocus(temp):
     try:
         temp=float(temp)
-        return '%.1f'%np.poly1d(B_FOCUS_PARAM)(temp)
+        return '%.1f'%BFOCUS(temp)
     except Exception:
         return 'Enter Temp'
 
@@ -48,4 +45,4 @@ bfocusv.set('Enter Temp')
 
 master.wm_title("M2FS Focus")
 
-mainloop( )
+mainloop()

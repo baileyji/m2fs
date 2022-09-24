@@ -6,7 +6,7 @@ from astropy.io import fits
 import argparse
 import ipdb
 import os.path
-from m2fs.focus import find_peaks
+from m2fs.util import find_peaks
 
 
 def parse_cl():
