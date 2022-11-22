@@ -12,7 +12,7 @@ import logging
 
 import m2fs.obs
 from m2fs.obs.merge import mergequad
-from m2fs.seqno import *
+from m2fs.seqno import get_seqnos_advanced
 
 def parse_cl():
     parser = argparse.ArgumentParser(description='Quadrant merger',

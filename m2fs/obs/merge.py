@@ -62,7 +62,7 @@ def _proc_quad(qdata, header, cosmic_settings):
 
 
 def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='', idir='',
-              repair=False, dogzip=False, overwrite=False):
+              repair=False, dogzip=False, overwrite=False, pool=4):
     """Give a seqno or a path to a quad if file set
     do_cosmic=bool or dict like
     sigma for init clip, fraction for neighbors, how much above background*
@@ -71,12 +71,12 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='', idir='',
     if side is None and not file:
         try:
             mergequad(frameno, side='r', do_cosmic=do_cosmic, idir=idir, odir=odir,
-                      repair=repair, dogzip=dogzip, overwrite=overwrite)
+                      repair=repair, dogzip=dogzip, overwrite=overwrite, pool=pool)
         except IOError:
             print('Need all quadrants for r{}'.format(frameno))
         try:
             mergequad(frameno, side='b', do_cosmic=do_cosmic, idir=idir, odir=odir,
-                      repair=repair, dogzip=dogzip, overwrite=overwrite)
+                      repair=repair, dogzip=dogzip, overwrite=overwrite, pool=pool)
         except IOError:
             print('Need all quadrants for b{}'.format(frameno))
         return
@@ -113,7 +113,7 @@ def mergequad(frameno, side=None, do_cosmic=False, file=False, odir='', idir='',
                 f.format(frameno=frameno, quad=3),
                 f.format(frameno=frameno, quad=4)),
                ofile, do_cosmic=do_cosmic,
-               pool=4, repair=repair, overwrite=overwrite)
+               pool=pool, repair=repair, overwrite=overwrite)
 
 
 def _mergequad(quadrants: (Tuple, List), ofile, do_cosmic: (bool, Dict)=False, pool: (Pool, int)=4,

@@ -58,13 +58,17 @@ class M2FSObsInfo(object):
 
     @property
     def seqno(self):
-        bf = os.path.basename(self.file)
+        """ returns -1 if unable to parse"""
         try:
-            no = int(bf[1:].split('_')[0].split(',')[0].split('-')[0].split('.')[0].split('c')[0])
-        except Exception as e:
-            print('Fault on ' + self.file)
-            raise e
-        return '{:04}'.format(no)
+            bf = os.path.basename(self.file)
+            try:
+                no = int(bf[1:].split('_')[0].split(',')[0].split('-')[0].split('.')[0].split('c')[0])
+            except Exception as e:
+                print('Fault on ' + self.file)
+                raise e
+            return '{:04}'.format(no)
+        except Exception:
+            return -1
 
     @property
     def seqnos(self):

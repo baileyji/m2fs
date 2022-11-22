@@ -20,7 +20,7 @@ import m2fs.obs
 from m2fs.util import find_peaks
 from m2fs.focus import *
 import m2fs.focus
-from m2fs.seqno import *
+from m2fs.seqno import get_seqnos
 
 
 def parse_cl():
