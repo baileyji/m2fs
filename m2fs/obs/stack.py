@@ -4,7 +4,8 @@ import scipy.ndimage as ndimage
 from jbastro.astroLib import crreject
 import os
 from astropy.time import Time, TimeDelta
-
+from logging import getLogger
+from m2fs.seqno import MSpecFits
 
 def compute_patch_val(variances):
     patch_val = max(1.05 * variances.max(), 1e8)
@@ -25,7 +26,7 @@ def mask_problem_spots(var, header, mask_val=1e35):
         var[1600:2056, 2518] = mask_val
 
 
-def stack_images(files, outfile, do_cosmic=False, overwrite=False, **crparams):
+def stack_images(files, outfile, do_cosmic=False, overwrite=False, flux_weighted=True, **crparams):
     """
     List of files to stack, output file sans extension.
 
@@ -42,6 +43,10 @@ def stack_images(files, outfile, do_cosmic=False, overwrite=False, **crparams):
 
     nfile = len(files)
     # load first to get info
+    msf = MSpecFits(files[0])
+    if msf.bias or msf.dark:
+        flux_weighted=False
+        
     with fits.open(files[0]) as im:
         header = im[0].header
         # 15 frames with float64 would be 3.7GB ram
@@ -51,6 +56,7 @@ def stack_images(files, outfile, do_cosmic=False, overwrite=False, **crparams):
             mask = np.zeros_like(imcube, dtype=bool)
         else:
             masked = False
+
 
     varcube = np.zeros_like(imcube)
 
@@ -126,43 +132,46 @@ def stack_images(files, outfile, do_cosmic=False, overwrite=False, **crparams):
 
     # this code issues warnings like crazy, but the math is ok because of a
     # final pass collecitng all the garbage
+    import warnings
+    with warnings.catch_warnings():
+        # Create masked arrays
+        imcube_masked = np.ma.array(imcube, mask=mask)
+        varcube_masked = np.ma.array(varcube, mask=mask)
 
-    # Create masked arrays
-    imcube_masked = np.ma.array(imcube, mask=mask)
-    varcube_masked = np.ma.array(varcube, mask=mask)
+        duration_corr = max(etimes) / np.array(etimes)
 
-    duration_corr = max(etimes) / np.array(etimes)
+        throughput_corr = np.array(midpoint_weights) / np.array(etimes)
+        throughput_corr[:] = throughput_corr.max() / throughput_corr
+        if not flux_weighted:
+            getLogger(__name__).info(f'Straigt stacking')
+            throughput_corr[:]=1
 
-    throughput_corr = np.array(midpoint_weights) / np.array(etimes)
-    throughput_corr = throughput_corr.max() / throughput_corr
+        ####### Try 3
+        # the correction factor as defined has a pathological edge case:
+        # if high throughput fibers or brighter targets are disproportionatly
+        # affected by clouds/field rotation, guiding errors, or the like then it
+        # would give unfair weight to that frame.
 
-    ####### Try 3
+        corr_fac = throughput_corr * duration_corr
+        patch_cube = (imcube_masked * corr_fac).mean(axis=2)
+        patch_cube = patch_cube[:, :, np.newaxis] / corr_fac
+        imcube[mask] = patch_cube[mask]
+        im = imcube.sum(axis=2)
 
-    # the correction factor as defined has a pathological edge case:
-    # if high throughput fibers or brighter targets are disproportionalty
-    # affected by clouds/field rotation, guiding errors, or the like then it
-    # would give unfair weight to that frame.
+        # fill value doesn't matter as mask check below will flag and cause patch
+        var = varcube_masked.sum(axis=2).filled(0)
+        var *= (im / imcube_masked.sum(axis=2)) ** 2
 
-    corr_fac = throughput_corr * duration_corr
-    patch_cube = (imcube_masked * corr_fac).mean(axis=2)
-    patch_cube = patch_cube[:, :, np.newaxis] / corr_fac
-    imcube[mask] = patch_cube[mask]
-    im = imcube.sum(axis=2)
+        mask_problem_spots(var, header, mask_val=np.nan)
 
-    # fill value doesn't matter as mask check below will flag and cause patch
-    var = varcube_masked.sum(axis=2).filled(0)
-    var *= (im / imcube_masked.sum(axis=2)) ** 2
+        im = im.astype(np.float32)
+        var = var.astype(np.float32)
 
-    mask_problem_spots(var, header, mask_val=np.nan)
+        bad = (mask.all(axis=2) | (~np.isfinite(im)) | (~np.isfinite(var)))
 
-    im = im.astype(np.float32)
-    var = var.astype(np.float32)
-
-    bad = (mask.all(axis=2) | (~np.isfinite(im)) | (~np.isfinite(var)))
-
-    patch_val = compute_patch_val(var[~bad])
-    im[bad] = 0.0
-    var[bad] = patch_val
+        patch_val = compute_patch_val(var[~bad])
+        im[bad] = 0.0
+        var[bad] = patch_val
 
     if (~np.isfinite(var)).any():
         import ipdb
@@ -197,9 +206,11 @@ def stack_images(files, outfile, do_cosmic=False, overwrite=False, **crparams):
     hdul.writeto(outfile, overwrite=overwrite)
 
 
-def update_single(file, outfile, do_cosmic=False, overwrite=False, **extra):
+def patch_single(file, outfile, do_cosmic=False, overwrite=False, **extra):
     if os.path.exists(outfile) and not overwrite:
         return
+    if do_cosmic:
+        raise NotImplementedError('No support for single frame CR rejection at present.')
     hdul = fits.open(file)
     mv = compute_patch_val(hdul['VARIANCE'].data)
     mask_problem_spots(hdul['VARIANCE'].data, hdul['SCIENCE'].header, mask_val=mv)

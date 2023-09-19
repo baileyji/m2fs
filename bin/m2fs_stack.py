@@ -75,7 +75,7 @@ if __name__ == '__main__':
         if len(filestack) == 1:
             print("Updating a single frame")
             outf = os.path.join(args.outdir, os.path.basename(filestack[0]).replace('.fits', ''))
-            update_single(filestack[0], outf, gzip=args.gzip, overwrite=args.overwrite)
+            patch_single(filestack[0], outf, gzip=args.gzip, overwrite=args.overwrite)
             continue
         seqnos = list(map(lambda f: int(m2fs.obs.info(f, no_load=True).seqno), filestack))
         filestack = list(zip(*sorted(list(zip(filestack, seqnos)), key=lambda x: x[1])))[0]

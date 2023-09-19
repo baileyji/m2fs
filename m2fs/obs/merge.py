@@ -121,7 +121,7 @@ def _mergequad(quadrants: (Tuple, List), ofile, do_cosmic: (bool, Dict)=False, p
     """quadrants: (Tuple, List), ofile, do_cosmic: bool, dict}=False, pool: {Pool, int}=4,
                repair=False, overwrite=False"""
     if not overwrite and os.path.exists(ofile):
-        return
+        return fits.open(ofile)
     # Load the data
     try:
         quadrant1 = fits.open(quadrants[0])
