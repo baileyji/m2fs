@@ -1,3 +1,4 @@
+import os.path
 from datetime import datetime
 import argparse
 from logging import getLogger
@@ -24,6 +25,9 @@ def parse_cl():
     parser.add_argument('--skipbias', dest='skip_bias', default=False,
                         action='store_true', required=False,
                         help='Skip processing bias frames')
+    parser.add_argument('--dry', dest='dry_run', default=False,
+                        action='store_true', required=False,
+                        help='Do not actually do anything')
     parser.add_argument('-o', dest='out', default='./no_backup/lcoreduction/reduced/',
                         action='store', required=False, type=str,
                         help='Out directory, also used for non-raw inputs')
@@ -59,9 +63,11 @@ if __name__ == '__main__':
     logging.basicConfig()
     log = getLogger('m2fs_reduce')
     log.propagate=True
-    list_file = '/Users/one/no_backup/lcoreduction/m2fsfeb23/list' or args.listfile
-    raw_dir = '/Volumes/DATA_CLAY/M2FS/' or args.raw
-    out_dir = '/Users/one/no_backup/lcoreduction/m2fsfeb23/' or args.out
+    list_file = args.listfile
+    raw_dir = args.raw
+    out_dir = args.out
+
+    assert os.path.exists(raw_dir)
 
     dry_run = False or args.dry_run
     overwrite = False or args.overwrite

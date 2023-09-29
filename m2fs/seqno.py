@@ -44,7 +44,7 @@ class SeqStr:
 
         self.side = side
         self.seq_id = seq_id
-        self.seq_str = seq  #does not include the ut
+        self.seq_str = seq  # does not include the ut
         self.nums = derangify(seq)
         self.docr = docr
         self.lamp = any(x in words for x in ('lamp', 'arc', 'th', 'xe', 'he', 'ne', 'thxe', 'thar', 'ar', 'benear',
@@ -219,10 +219,10 @@ class MSpecFits(MSpecCCDFileset):
     def __init__(self, fileset, load=True, ut=None, run_id='', raw_path='', merged_path='',
                  listfile_record:SeqStr=None):
         if isinstance(fileset, MSpecCCDFileset):
-            super(self).__init__(fileset.user_filename, ut=fileset.ut, run_id=fileset.run_id,
+            super().__init__(fileset.user_filename, ut=fileset.ut, run_id=fileset.run_id,
                              raw_path=raw_path or fileset.raw_path, merged_path=merged_path or fileset.merged_path)
         else:
-            super(self).__init__(fileset, ut=ut, run_id=run_id, raw_path=raw_path, merged_path=merged_path)
+            super().__init__(fileset, ut=ut, run_id=run_id, raw_path=raw_path, merged_path=merged_path)
         self._header = None
         self._listfile = None
         self.cr_settings = False
@@ -351,7 +351,7 @@ class MSpecStack:
         ss = rangify([a.seqno for a in self.files], delim='_')
         ut = self.files[0].ut
         run_id = self.files[0].run_id
-        return os.path.join(ut or run_id, f'r{ss}')
+        return os.path.join(ut or run_id, f'{self.files[0].side}{ss}')
 
     def file(self, gzipped=None, path_override='') -> str:
         if len(self.files)==1:
@@ -418,28 +418,30 @@ class MSpecFileCollection:
             ret.append(self.r.seq_id)
         if self.b is not None:
             ret.append(self.b.seq_id)
-        if ret[0].replace('r','b')==ret[1]:
-            ret.append(ret[0].replace('r',''))
+        try:
+            if ret[0].replace('r','b')==ret[1]:
+                ret.append(ret[0].replace('r',''))
+        except IndexError:
+            raise #TODO
         return tuple(ret)
 
-    # def stacked_file(self, side, gzipped=None, stacked_path='') -> str:
-    #     if self
-    #     if gzipped is False:
-    #         gzipped = ''
-    #     elif gzipped is True:
-    #         gzipped = '.gz'
-    #     else:
-    #         gzipped = '.gz' if self.gzipped else ''
-    #
-    #     if not stacked_path:
-    #         stacked_path = self.stacked_path
-    #
-    #     side=side.lower()
-    #     x = self.r if side == 'r' else self.b
-    #     if not x:
-    #         return ''
-    #     seqnos = [a.seqno for a in x]
-    #     return os.path.join(stacked_path, f"{side}{rangify(seqnos, delim='_')}.fits{gzipped}")
+    def stacked_file(self, side, gzipped=None, stacked_path='') -> str:
+        if gzipped is False:
+            gzipped = ''
+        elif gzipped is True:
+            gzipped = '.gz'
+        else:
+            gzipped = '.gz' if self.gzipped else ''
+
+        if not stacked_path:
+            stacked_path = self.stacked_path
+
+        side=side.lower()
+        x = self.r if side == 'r' else self.b
+        if not x:
+            return ''
+        seqnos = [a.seqno for a in x]
+        return os.path.join(stacked_path, f"{side}{rangify(seqnos, delim='_')}.fits{gzipped}")
 
     @property
     def flat_or_twilight(self):

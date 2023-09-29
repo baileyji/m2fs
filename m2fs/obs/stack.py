@@ -7,6 +7,7 @@ from astropy.time import Time, TimeDelta
 from logging import getLogger
 from m2fs.seqno import MSpecFits
 
+
 def compute_patch_val(variances):
     patch_val = max(1.05 * variances.max(), 1e8)
     if patch_val >= 1e38:
@@ -46,7 +47,7 @@ def stack_images(files, outfile, do_cosmic=False, overwrite=False, flux_weighted
     msf = MSpecFits(files[0])
     if msf.bias or msf.dark:
         flux_weighted=False
-        
+
     with fits.open(files[0]) as im:
         header = im[0].header
         # 15 frames with float64 would be 3.7GB ram
@@ -143,8 +144,8 @@ def stack_images(files, outfile, do_cosmic=False, overwrite=False, flux_weighted
         throughput_corr = np.array(midpoint_weights) / np.array(etimes)
         throughput_corr[:] = throughput_corr.max() / throughput_corr
         if not flux_weighted:
-            getLogger(__name__).info(f'Straigt stacking')
-            throughput_corr[:]=1
+            getLogger(__name__).info(f'Straight stacking')
+            throughput_corr[:] = 1
 
         ####### Try 3
         # the correction factor as defined has a pathological edge case:
